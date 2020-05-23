@@ -1,9 +1,9 @@
-# mizu design doc
+# Mizu
 
-mizu is an experiment to try and provide secure and asynchronous messaging
+Mizu is an experiment to try and provide secure and asynchronous messaging
 similar to email combined with PGP, while being forward secure and trying to
 mimimalize information leakage, similar to
-[pond](https://web.archive.org/web/20151101081526/https://pond.imperialviolet.org/).
+[Pond](https://web.archive.org/web/20151101081526/https://pond.imperialviolet.org/).
 
 ## security, asynchronicity, forward security, and minimization of information leakage
 
@@ -12,14 +12,14 @@ mimimalize information leakage, similar to
 - forward security: TODO
 - minimization of information leakage: TODO
 
-TODO: does mizu really minimize traffic leakage?
+TODO: does Mizu really minimize traffic leakage?
 TODO: operations on smart contracts require authentication of address, this
       will most likely leak information (ex. Alice posting a Discovery message to
       Bob show Alice paid for it, linking Bob and Alice together)
 
-## how does mizu work?
+## how does Mizu work?
 
-mizu initiates sessions between users with a protocol based on
+Mizu initiates sessions between users with a protocol based on
 [Signal's X3DH Key Agreement Protocol](https://signal.org/docs/specifications/x3dh/)
 with the One-time Prekey omitted. Each message is encrypted with
 [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) to
@@ -30,7 +30,7 @@ provide forward secrecy.
 Each user has associated with it a postal box (which is public) and a list of
 contacts (which is private). When sending a message, the user will encrypt
 the message with recipient's identity and add it their own postal box.
-Periodically, mizu will check the postal boxes of each identity in its
+Periodically, Mizu will check the postal boxes of each identity in its
 contact list and attempt to decrypt all new messages found.
 Those it successfully decrypts will have been addressed towards the user.
 
@@ -62,7 +62,7 @@ spammer, doing this at a large scale is impractical.
 
 If an adversary mounts a successfull (albeit extremely costly) attack against
 the Tezos blockchain, it will be possible to remove blocks which will
-constitute a Denial of Service attack on mizu. However, messages in mizu
+constitute a Denial of Service attack on Mizu. However, messages in Mizu
 will still be impossible to forge or replay, and stay confidential.
 
 ## why not pond?
@@ -80,7 +80,7 @@ TODO
 ## why not [Signal](https://signal.org/)?
 
 While I agree Signal should be your first choice when looking for a secure
-messenger, it has different design goals from mizu.
+messenger, it has different design goals from Mizu.
 
 - Signal requires a smartphone and a phone number
 
@@ -93,7 +93,7 @@ TODO
 
 ## issues to consider
 
-- How should mizu resolve the following problem outlined here:  
+- How should Mizu resolve the following problem outlined here:  
   > Alice and Bob might simultaneously initiate a new session with each other,
   > so that two new sessions are created. For the Double Ratchet to be
   > maximally effective Alice and Bob must send and receive messages using
