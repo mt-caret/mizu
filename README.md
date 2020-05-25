@@ -39,8 +39,8 @@ TODO: define "periodically"
 Say Alice wants to communicate with Bob. If Bob is aware of this,
 both Alice and Bob can manually add each other's identities to their contact
 lists. However, if Bob is not aware of Alice, communication can be initiated
-from Alice by sending a *discovery request* message solely consisting of her identity,
-encrypted with Bob's public key. Bob can then choose to add Alice to his
+from Alice by sending a *discovery request* message solely consisting of her
+identity, encrypted with Bob's public key. Bob can then choose to add Alice to his
 contact list and start communicating.
 
 ### transport
@@ -48,6 +48,8 @@ contact list and start communicating.
 Identities are Tezos public keys / addresses, and both the postal box and
 discovery requests are maintained by a Tezos smart contract, thus are
 globally replicated across all Tezos nodes.
+
+## potential attacks
 
 ### spam
 

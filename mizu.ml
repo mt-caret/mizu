@@ -2,7 +2,7 @@ open SCaml
 
 type action =
   | Post of bytes list * nat list
-  | Poke of address
+  | Poke of address * bytes
   | Register of bytes option * bytes
 
 (* Timestamps impose a total ordering on all messages, as Tezos should
@@ -17,7 +17,7 @@ type user_data =
   { identity_key : bytes
   ; signed_prekey : bytes
   ; postal_box : message list
-  ; pokes : address list
+  ; pokes : bytes list
   }
 
 type storage = (address, user_data) big_map
@@ -59,13 +59,13 @@ let post (add : bytes list) (remove : nat list) (storage : storage) =
   ([] : operation list), BigMap.update sender (Some new_user_data) storage
 ;;
 
-let poke (address : address) (storage : storage) =
+let poke (address : address) (data : bytes) (storage : storage) =
   (* Anybody can poke anybody else *)
   match BigMap.get address storage with
   | None -> failwith "invalid address"
   | Some user_data ->
     let new_user_data =
-      { user_data with pokes = Global.get_sender () :: user_data.pokes }
+      { user_data with pokes = data :: user_data.pokes }
     in
     ([] : operation list), BigMap.update address (Some new_user_data) storage
 ;;
@@ -88,6 +88,6 @@ let register (identity_key : bytes option) (signed_prekey : bytes) (storage : st
 let[@entry] main action storage =
   match action with
   | Post (add, remove) -> post add remove storage
-  | Poke address -> poke address storage
+  | Poke (address, data) -> poke address data storage
   | Register (identity_key, signed_prekey) -> register identity_key signed_prekey storage
 ;;
