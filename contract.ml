@@ -15,7 +15,12 @@ type message =
 
 type user_data =
   { identity_key : bytes
-  ; signed_prekey : bytes
+  ; prekey : bytes
+        (* This corresponds to X3DH's signed prekey. It is simply called
+         * [prekey] here, since mizu does not provide an explicit signature
+         * signed with the identity key, but instead reliess on this smart
+         * contract to make sure that only the owner of the tezos address can
+         * set/update the prekey. *)
   ; postal_box : message list
   ; pokes : bytes list
   }
@@ -64,23 +69,20 @@ let poke (address : address) (data : bytes) (storage : storage) =
   match BigMap.get address storage with
   | None -> failwith "invalid address"
   | Some user_data ->
-    let new_user_data =
-      { user_data with pokes = data :: user_data.pokes }
-    in
+    let new_user_data = { user_data with pokes = data :: user_data.pokes } in
     ([] : operation list), BigMap.update address (Some new_user_data) storage
 ;;
 
-let register (identity_key : bytes option) (signed_prekey : bytes) (storage : storage) =
+let register (identity_key : bytes option) (prekey : bytes) (storage : storage) =
   let sender = Global.get_sender () in
   let new_user_data =
-    (* Create new [user_data] instance or update signed_prekey. When creating
+    (* Create new [user_data] instance or update prekey. When creating
      * a new [user_data] instance, [identity_key] must be supplied. *)
     match identity_key, BigMap.get sender storage with
     | None, None -> failwith "must register with identity key"
-    | Some identity_key, None ->
-      { identity_key; signed_prekey; postal_box = []; pokes = [] }
-    | None, Some user_data -> { user_data with signed_prekey }
-    | Some identity_key, Some user_data -> { user_data with identity_key; signed_prekey }
+    | Some identity_key, None -> { identity_key; prekey; postal_box = []; pokes = [] }
+    | None, Some user_data -> { user_data with prekey }
+    | Some identity_key, Some user_data -> { user_data with identity_key; prekey }
   in
   ([] : operation list), BigMap.update sender (Some new_user_data) storage
 ;;
@@ -89,5 +91,5 @@ let[@entry] main action storage =
   match action with
   | Post (add, remove) -> post add remove storage
   | Poke (address, data) -> poke address data storage
-  | Register (identity_key, signed_prekey) -> register identity_key signed_prekey storage
+  | Register (identity_key, prekey) -> register identity_key prekey storage
 ;;
