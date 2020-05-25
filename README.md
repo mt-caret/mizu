@@ -100,6 +100,8 @@ TODO
   > matching sessions, so somehow they must agree on which matching sessions to
   > use.  
   [Signal >> Specifications >> The Sesame Algorithm: Session Management for Asynchronous Message Encryption](https://signal.org/docs/specifications/sesame/)
+  - As messages should be totally ordered, if clients always use the newest
+    ephemeral keys, keeping the two newest sets of keys should be enough?
 - A blockchain combined with a smart contract offers significantly different
   security characteristics when compared to sending messages over an unreliable
   network. What are the security implication of this, and what tradeoffs are
@@ -110,3 +112,6 @@ TODO
 - Discovery requests are currently very naive, should possibly be reworked to
   ease key agreement.
 
+## TODOs
+
+- [ ] add a way to remove pokes
