@@ -40,7 +40,7 @@ Say Alice wants to communicate with Bob. If Bob is aware of this,
 both Alice and Bob can manually add each other's identities to their contact
 lists. However, if Bob is not aware of Alice, communication can be initiated
 from Alice by sending a *discovery request* message solely consisting of her
-identity, encrypted with Bob's public key. Bob can then choose to add Alice to his
+identity encrypted with Bob's public key. Bob can then choose to add Alice to his
 contact list and start communicating.
 
 ### transport
