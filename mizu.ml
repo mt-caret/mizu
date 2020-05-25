@@ -3,6 +3,7 @@ open SCaml
 type action =
   | Post of bytes list * nat list
   | Poke of address
+  | Register of bytes
 
 (* Timestamps impose a total ordering on all messages, as Tezos should
  * guarantee strict monotonicity.
@@ -13,7 +14,8 @@ type message =
   }
 
 type user_data =
-  { postal_box : message list
+  { signed_prekey : bytes
+  ; postal_box : message list
   ; pokes : address list
   }
 
@@ -33,9 +35,7 @@ let post (add : bytes list) (remove : nat list) (storage : storage) =
   let new_user_data =
     (* You can only post to your own postal box *)
     match BigMap.get sender storage with
-    | None ->
-      assert (is_empty remove);
-      { postal_box = new_messages; pokes = [] }
+    | None -> failwith "user is not registered"
     | Some user_data ->
       let _, remaining_indices, postal_box =
         (* We assume here that [remove] is sorted in ascending order,
@@ -69,8 +69,20 @@ let poke (address : address) (storage : storage) =
     ([] : operation list), BigMap.update address (Some new_user_data) storage
 ;;
 
+let register (signed_prekey : bytes) (storage : storage) =
+  let sender = Global.get_sender () in
+  let new_user_data =
+    (* create new [user_data] instance or update signed_prekey *)
+    match BigMap.get sender storage with
+    | None -> { signed_prekey; postal_box = []; pokes = [] }
+    | Some user_data -> { user_data with signed_prekey }
+  in
+  ([] : operation list), BigMap.update sender (Some new_user_data) storage
+;;
+
 let[@entry] main action storage =
   match action with
   | Post (add, remove) -> post add remove storage
   | Poke address -> poke address storage
+  | Register signed_prekey -> register signed_prekey storage
 ;;
