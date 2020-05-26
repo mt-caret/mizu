@@ -30,16 +30,20 @@ impl X3DHClient {
         }
     }
 
-    fn kdf(input: &[u8]) -> [u8; 32] {
+    fn kdf(input: &[u8]) -> [[u8; 32]; 3] {
         // We prepend 32 bytes of 0xff here, per the specification in X3DH.
         let ikm = [&[0xff; 32], input].concat();
 
         // The salt is set to None, which is then automatically zeroed out.
         let h = Hkdf::<Sha256>::new(None, &ikm);
-        let mut okm = [0u8; 32];
+        let mut okm0 = [0u8; 32];
+        let mut okm1 = [0u8; 32];
+        let mut okm2 = [0u8; 32];
 
-        h.expand(INFO, &mut okm).unwrap();
-        okm
+        h.expand(INFO, &mut okm0).unwrap();
+        h.expand(INFO, &mut okm1).unwrap();
+        h.expand(INFO, &mut okm2).unwrap();
+        [okm0, okm1, okm2]
     }
 
     pub fn derive_initial_sending_key<R: CryptoRng + RngCore>(
@@ -61,8 +65,9 @@ impl X3DHClient {
         let dh2 = *ephemeral_private_key.diffie_hellman(&ik.0).as_bytes();
         let dh3 = *ephemeral_private_key.diffie_hellman(&pk.0).as_bytes();
         let kdf_input = [dh1, dh2, dh3].concat();
+        let [secret_key, _, _] = X3DHClient::kdf(&kdf_input);
 
-        X3DHSecretKey(X3DHClient::kdf(&kdf_input))
+        X3DHSecretKey(secret_key)
     }
 }
 
