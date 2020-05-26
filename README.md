@@ -1,5 +1,7 @@
 # Mizu
 
+> 上善若水
+
 Mizu is an experiment to try and provide secure and asynchronous messaging
 similar to email combined with PGP, while being forward secure and trying to
 mimimalize information leakage, similar to
