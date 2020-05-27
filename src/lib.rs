@@ -127,6 +127,9 @@ impl X3DHClient {
         sender_info: &[u8],
         receiver_info: &[u8],
     ) -> Vec<u8> {
+        // TODO: I think runnin the secret through the kdf and using the
+        // outputs this way is valid; should check libsignal sources and
+        // mimic what they do.
         let [key, _, nonce_base] = X3DHClient::kdf(&secret_key.0);
         let key = GenericArray::from_slice(&key);
         let nonce = GenericArray::from_slice(&nonce_base[0..12]);
