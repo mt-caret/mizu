@@ -1,12 +1,15 @@
 use rand::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
 use x25519_dalek::*;
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct IdentityPublicKey(pub PublicKey);
 pub struct IdentityKeyPair {
     private_key: StaticSecret,
-    public_key: IdentityPublicKey,
+    pub public_key: IdentityPublicKey,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PrekeyPublicKey(pub PublicKey);
 pub struct PrekeyKeyPair {
     /// While the prekey keypair has a shorter lifespan than that of the
@@ -16,6 +19,9 @@ pub struct PrekeyKeyPair {
     private_key: StaticSecret,
     public_key: PrekeyPublicKey,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct EphemeralPublicKey(pub PublicKey);
 
 impl IdentityKeyPair {
     pub fn new<R: CryptoRng + RngCore>(mut csprng: &mut R) -> IdentityKeyPair {

@@ -2,9 +2,10 @@
 
 > 上善若水
 
-Mizu is an experiment to try and provide secure and asynchronous messaging
-similar to email combined with PGP, while being forward secure and trying to
-mimimalize information leakage, similar to
+Mizu is an experiment to explore what secure, private, and asynchronous
+messaging might look on the blockchain.
+Mizu is similar to email combined with PGP, while being forward secure and
+mimimizing information leakage, similar to
 [Pond](https://web.archive.org/web/20151101081526/https://pond.imperialviolet.org/).
 
 ## security, asynchronicity, forward security, and minimization of information leakage
