@@ -20,7 +20,20 @@ type user_data =
          * [prekey] here, since mizu does not provide an explicit signature
          * signed with the identity key, but instead reliess on this smart
          * contract to make sure that only the owner of the tezos address can
-         * set/update the prekey. *)
+         * set/update the prekey.
+         *
+         * The X3DH spec (section 4.5 (Signatures)) points out that failing to
+         * provide a signature will make the protocol vulnerable to a "weak
+         * forward secrecy" attack, where a malicious server provides forged
+         * prekeys to the sender, and then compromises the recipient's identity
+         * keys to calculate the secret key. However, in Mizu a Tezos smart
+         * contract plays the role of the server, so it should be safe to
+         * assume that such attacks cannot take place.
+         *
+         * TODO: There are probably negative implications here for deniability
+         * as all messages are signed by a Tezos private key, and should be
+         * investigated further.
+         * *)
   ; postal_box : message list
   ; pokes : bytes list
   }

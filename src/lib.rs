@@ -22,6 +22,8 @@ use x25519_dalek::*;
 static INFO: &'static [u8; 12] = b"MizuProtocol";
 
 pub struct X3DHClient {
+    // We omit the one-time prekey here, since we trust the Tezos blockchain
+    // to not "replay" messages.
     identity_key: IdentityKeyPair,
     prekey: PrekeyKeyPair,
 }
@@ -61,7 +63,7 @@ impl X3DHClient {
     }
 
     fn kdf(input: &[u8]) -> [[u8; 32]; 3] {
-        // We prepend 32 bytes of 0xff here, per the specification in X3DH.
+        // We prepend 32 bytes of 0xff here, per the X3DH spec.
         let ikm = [&[0xff; 32], input].concat();
 
         // The salt is set to None, which is then automatically zeroed out.
@@ -103,6 +105,10 @@ impl X3DHClient {
         )
     }
 
+    // sender_info and receiver_info passed here *must* include information of
+    // the Tezos addresses of the sender and receiver in order to prevent
+    // "unknown key share" attacks. See X3DH spec section 4.8
+    // (Identity binding).
     pub fn build_associated_data(
         sender_key: &IdentityPublicKey,
         receiver_key: &IdentityPublicKey,

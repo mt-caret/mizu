@@ -12,10 +12,10 @@ pub struct IdentityKeyPair {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PrekeyPublicKey(pub PublicKey);
 pub struct PrekeyKeyPair {
-    /// While the prekey keypair has a shorter lifespan than that of the
-    /// identity keypair, its lifespan is still is on the order of days or
-    /// weeks at the shortest, so must be serializable (i.e. implemented as
-    /// StaticSecret instead of EphemeralSecret).
+    // While the prekey keypair has a shorter lifespan than that of the
+    // identity keypair, its lifespan is still is on the order of days or
+    // weeks at the shortest, so must be serializable (i.e. implemented as
+    // StaticSecret instead of EphemeralSecret).
     private_key: StaticSecret,
     public_key: PrekeyPublicKey,
 }
