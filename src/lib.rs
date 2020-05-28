@@ -250,6 +250,9 @@ mod tests {
             .decrypt_initial_message(&encrypted_message, sender_info, receiver_info)
             .unwrap();
 
+        // If X3DH is implemented correctly, both Alice and Bob should end up
+        // with the same secret key and the decrypted message should match
+        // the original message.
         alice_sk.0 == bob_sk.0 && message_content == decrypted_message
     }
 }
