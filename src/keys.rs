@@ -17,7 +17,7 @@ pub struct PrekeyKeyPair {
     // weeks at the shortest, so must be serializable (i.e. implemented as
     // StaticSecret instead of EphemeralSecret).
     private_key: StaticSecret,
-    public_key: PrekeyPublicKey,
+    pub public_key: PrekeyPublicKey,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -33,7 +33,11 @@ impl IdentityKeyPair {
         }
     }
 
-    pub fn dh(&self, public_key: &PrekeyPublicKey) -> SharedSecret {
+    pub fn dh_pk(&self, public_key: &PrekeyPublicKey) -> SharedSecret {
+        self.private_key.diffie_hellman(&public_key.0)
+    }
+
+    pub fn dh_ek(&self, public_key: &EphemeralPublicKey) -> SharedSecret {
         self.private_key.diffie_hellman(&public_key.0)
     }
 }

@@ -6,6 +6,13 @@ extern crate serde;
 extern crate sha2;
 extern crate x25519_dalek;
 
+#[cfg(test)]
+#[macro_use]
+extern crate quickcheck;
+#[cfg(test)]
+#[macro_use(quickcheck)]
+extern crate quickcheck_macros;
+
 pub mod keys;
 
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead, Payload};
@@ -93,7 +100,7 @@ impl X3DHClient {
         let ephemeral_private_key = StaticSecret::new(&mut csprng);
         let ephemeral_public_key = PublicKey::from(&ephemeral_private_key);
 
-        let dh1 = *self.identity_key.dh(&pk).as_bytes();
+        let dh1 = *self.identity_key.dh_pk(&pk).as_bytes();
         let dh2 = *ephemeral_private_key.diffie_hellman(&ik.0).as_bytes();
         let dh3 = *ephemeral_private_key.diffie_hellman(&pk.0).as_bytes();
         let kdf_input = [dh1, dh2, dh3].concat();
@@ -127,7 +134,7 @@ impl X3DHClient {
     pub fn construct_initial_message(
         &self,
         content: &[u8],
-        secret_key: X3DHSecretKey,
+        secret_key: &X3DHSecretKey,
         ephemeral_key: &EphemeralPublicKey,
         receiver_key: &IdentityPublicKey,
         sender_info: &[u8],
@@ -167,12 +174,82 @@ impl X3DHClient {
         // be a case of nontrivial metadata leakage.
         bincode::serialize(&message).unwrap()
     }
+
+    pub fn decrypt_initial_message(
+        &self,
+        message: &[u8],
+        sender_info: &[u8],
+        receiver_info: &[u8],
+    ) -> Option<(X3DHSecretKey, Vec<u8>)> {
+        // TODO: Is it safe to blindly trust identity_key provided in this
+        // message, or does it open us to attacks?
+        let message: InitialMessage = bincode::deserialize(message).ok()?;
+
+        let dh1 = *self.prekey.dh(&message.identity_key.0).as_bytes();
+        let dh2 = *self.identity_key.dh_ek(&message.ephemeral_key).as_bytes();
+        let dh3 = *self.prekey.dh(&message.ephemeral_key.0).as_bytes();
+        let kdf_input = [dh1, dh2, dh3].concat();
+        let [secret_key, _, _] = X3DHClient::kdf(&kdf_input);
+
+        let [key, _, nonce_base] = X3DHClient::kdf(&secret_key);
+        let key = GenericArray::from_slice(&key);
+        let nonce = GenericArray::from_slice(&nonce_base[0..12]);
+        let aad = X3DHClient::build_associated_data(
+            &message.identity_key,
+            &self.identity_key.public_key,
+            sender_info,
+            receiver_info,
+        );
+        let payload = Payload {
+            msg: &message.ciphertext,
+            aad: &aad,
+        };
+        let cipher = Aes256Gcm::new(*key);
+        let plaintext = cipher.decrypt(&nonce, payload).ok()?;
+
+        Some((X3DHSecretKey(secret_key), plaintext))
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use rand::rngs::OsRng;
     #[test]
     fn it_works() {
         assert_eq!(2 + 2, 4);
+    }
+
+    #[quickcheck]
+    fn x3dh_key_agreement(message_content: Vec<u8>) -> bool {
+        let mut csprng = OsRng;
+        let alice = X3DHClient::new(&mut csprng);
+        let bob = X3DHClient::new(&mut csprng);
+
+        // We assume here that bob's public keys are published somewhere,
+        // and have been obtained in some way.
+        let (alice_sk, alice_ek) = alice.derive_initial_keys(
+            &mut csprng,
+            &bob.identity_key.public_key,
+            &bob.prekey.public_key,
+        );
+        let sender_info = b"alice";
+        let receiver_info = b"bob";
+        let encrypted_message = alice.construct_initial_message(
+            &message_content,
+            &alice_sk,
+            &alice_ek,
+            &bob.identity_key.public_key,
+            sender_info,
+            receiver_info,
+        );
+
+        // Bob then gets an encrypted message, and proceeds to derive the
+        // secret key and decrypt it.
+        let (bob_sk, decrypted_message) = bob
+            .decrypt_initial_message(&encrypted_message, sender_info, receiver_info)
+            .unwrap();
+
+        alice_sk.0 == bob_sk.0 && message_content == decrypted_message
     }
 }
