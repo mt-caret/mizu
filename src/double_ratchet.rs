@@ -5,24 +5,42 @@ use aes_gcm::Aes256Gcm;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
+static MAX_SKIP: u64 = 32;
+
+#[derive(Clone)]
 pub struct DoubleRatchetClient {
     sending_ratchet_keypair: RatchetKeyPair,
     receiving_ratchet_key: Option<RatchetPublicKey>,
     root_key: RootKey,
     sending_chain_key: Option<ChainKey>,
     receiving_chain_key: Option<ChainKey>,
-    sent_message_count: u64,
-    received_message_count: u64,
+    sent_count: u64,
+    received_count: u64,
     previous_sending_chain_count: u64,
-    skipped_messages: HashMap<(RatchetPublicKey, u64), MessageKey>,
+    skipped_messages: HashMap<SkippedMessagesKey, MessageKey>,
+}
+
+// Since RatchetPublicKey is actually x25519_dalek's PublicKey and does not
+// have an Hash trait implementation, we implement it here. As Eq is not
+// implemented as a constant-time comparison, we purposefully do it here
+// instead of on RatchetPublicKey to prevent potential misuse (resulting in
+// timing attacks).
+#[derive(PartialEq, Eq, Clone)]
+pub struct SkippedMessagesKey(RatchetPublicKey, u64);
+impl Hash for SkippedMessagesKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (self.0).0.as_bytes().hash(state);
+        self.1.hash(state);
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DoubleRatchetMessageHeader {
     ratchet_public_key: RatchetPublicKey,
     previous_sending_chain_count: u64,
-    sent_message_count: u64,
+    sent_count: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -54,8 +72,8 @@ impl DoubleRatchetClient {
             root_key: root_key,
             sending_chain_key: Some(sending_chain_key),
             receiving_chain_key: None,
-            sent_message_count: 0,
-            received_message_count: 0,
+            sent_count: 0,
+            received_count: 0,
             previous_sending_chain_count: 0,
             skipped_messages: HashMap::new(),
         }
@@ -74,8 +92,8 @@ impl DoubleRatchetClient {
             root_key: root_key,
             sending_chain_key: None,
             receiving_chain_key: None,
-            sent_message_count: 0,
-            received_message_count: 0,
+            sent_count: 0,
+            received_count: 0,
             previous_sending_chain_count: 0,
             skipped_messages: HashMap::new(),
         }
@@ -101,7 +119,7 @@ impl DoubleRatchetClient {
 
         let message_header = DoubleRatchetMessageHeader {
             ratchet_public_key: self.sending_ratchet_keypair.public_key.clone(),
-            sent_message_count: self.sent_message_count,
+            sent_count: self.sent_count,
             previous_sending_chain_count: self.previous_sending_chain_count,
         };
 
@@ -123,7 +141,104 @@ impl DoubleRatchetClient {
         }
     }
 
-    pub fn attempt_message_decryption(&mut self) {
-        unimplemented!()
+    fn skip_message_keys(&mut self, until: u64) -> Option<()> {
+        if self.received_count + MAX_SKIP < until {
+            return None;
+        }
+
+        if let Some(receiving_chain_key) = self.receiving_chain_key.as_mut() {
+            while self.received_count < until {
+                let message_key = receiving_chain_key.kdf();
+                // unwrapping self.receiving_ratchet_key here is safe,
+                // since receiving_chain_key.is_some() implies
+                // self.receiving_ratchet_key.is_some()
+                self.skipped_messages.insert(
+                    SkippedMessagesKey(
+                        self.receiving_ratchet_key.clone().unwrap(),
+                        self.received_count,
+                    ),
+                    message_key,
+                );
+                self.received_count += 1;
+            }
+        }
+        Some(())
+    }
+
+    fn decrypt(
+        message_key: MessageKey,
+        ciphertext: &[u8],
+        associated_data: &[u8],
+    ) -> Option<Vec<u8>> {
+        let payload = Payload {
+            msg: &ciphertext,
+            aad: &associated_data,
+        };
+
+        let key = GenericArray::from_slice(&message_key.0);
+        let nonce = GenericArray::from_slice(&message_key.1);
+
+        let cipher = Aes256Gcm::new(*key);
+        cipher.decrypt(&nonce, payload).ok()
+    }
+
+    pub fn attempt_message_decryption<R: CryptoRng + RngCore>(
+        &mut self,
+        mut csprng: &mut R,
+        serialized_message: &[u8],
+        associated_data: X3DHAD,
+    ) -> Option<Vec<u8>> {
+        let message: DoubleRatchetMessage = bincode::deserialize(serialized_message).ok()?;
+        let associated_data =
+            DoubleRatchetClient::build_associated_data(associated_data, &message.header);
+
+        // If the message header indicates a skipped message, remove the
+        // corresponding message key, decrypt with it, and return.
+        if let Some(message_key) = self.skipped_messages.remove(&SkippedMessagesKey(
+            message.header.ratchet_public_key.clone(),
+            message.header.sent_count,
+        )) {
+            return DoubleRatchetClient::decrypt(
+                message_key,
+                &message.ciphertext,
+                &associated_data,
+            );
+        }
+
+        let mut new_state = self.clone();
+
+        // If the message has a new RatchetPublicKey, commence the DH ratchet.
+        if Some(&message.header.ratchet_public_key) != new_state.receiving_ratchet_key.as_ref() {
+            new_state.skip_message_keys(message.header.previous_sending_chain_count)?;
+
+            new_state.previous_sending_chain_count = new_state.sent_count;
+            new_state.sent_count = 0;
+            new_state.received_count = 0;
+            new_state.receiving_ratchet_key = Some(message.header.ratchet_public_key.clone());
+            new_state.receiving_chain_key = Some(
+                new_state.root_key.kdf(
+                    new_state
+                        .sending_ratchet_keypair
+                        .dh(&message.header.ratchet_public_key),
+                ),
+            );
+            new_state.sending_ratchet_keypair = RatchetKeyPair::new(&mut csprng);
+            new_state.sending_chain_key = Some(
+                new_state.root_key.kdf(
+                    new_state
+                        .sending_ratchet_keypair
+                        .dh(&message.header.ratchet_public_key),
+                ),
+            );
+        }
+
+        new_state.skip_message_keys(message.header.sent_count)?;
+        let message_key = new_state.receiving_chain_key.as_mut().unwrap().kdf();
+        let plaintext =
+            DoubleRatchetClient::decrypt(message_key, &message.ciphertext, &associated_data)?;
+        new_state.received_count += 1;
+
+        *self = new_state;
+        Some(plaintext)
     }
 }

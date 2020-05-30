@@ -77,6 +77,19 @@ pub struct EphemeralPublicKey(pub PublicKey);
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RatchetPublicKey(pub PublicKey);
+
+// Not that this Eq impl is not a constant-time comparison. This should not
+// be an issue as Mizu should *never* operate in a real-time fashion, so
+// is not vulnerable to timing attacks.
+// TODO: Is this really the case? Should investigate. This is **very** important.
+impl PartialEq for RatchetPublicKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.as_bytes() == other.0.as_bytes()
+    }
+}
+impl Eq for RatchetPublicKey {}
+
+#[derive(Clone)]
 pub struct RatchetKeyPair {
     // Similar situation as PrekeyKeyPair's StaticSecret.
     private_key: StaticSecret,
@@ -98,6 +111,7 @@ impl RatchetKeyPair {
     }
 }
 
+#[derive(Clone)]
 pub struct RootKey(pub [u8; 32]);
 
 static INFO_RK: &'static [u8; 19] = b"MizuProtocolRootKey";
@@ -116,8 +130,10 @@ impl RootKey {
     }
 }
 
+#[derive(Clone)]
 pub struct ChainKey([u8; 32]);
 // Key material for the nonce used in AEAD is bundled along with message key
+#[derive(Clone)]
 pub struct MessageKey(pub [u8; 32], pub [u8; 32]);
 
 impl ChainKey {
