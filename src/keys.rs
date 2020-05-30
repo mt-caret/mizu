@@ -96,13 +96,13 @@ impl RootKey {
     // update RootKey and return the next ChainKey
     pub fn kdf(&mut self, shared_secret: SharedSecret) -> ChainKey {
         let h = Hkdf::<Sha256>::new(Some(&self.0), shared_secret.as_bytes());
-        let mut okm0 = [0u8; 32];
-        let mut okm1 = [0u8; 32];
-        h.expand(INFO_RK, &mut okm0).unwrap();
-        h.expand(INFO_RK, &mut okm1).unwrap();
+        let mut rk = [0u8; 32];
+        let mut ck = [0u8; 32];
+        h.expand(INFO_RK, &mut rk).unwrap();
+        h.expand(INFO_RK, &mut ck).unwrap();
 
-        self.0 = okm1;
-        ChainKey(okm1)
+        self.0 = rk;
+        ChainKey(ck)
     }
 }
 
