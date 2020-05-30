@@ -113,6 +113,23 @@ impl DoubleRatchetClient {
         .concat()
     }
 
+    fn encrypt(
+        message_key: MessageKey,
+        ciphertext: &[u8],
+        associated_data: &[u8],
+    ) -> Option<Vec<u8>> {
+        let payload = Payload {
+            msg: &ciphertext,
+            aad: &associated_data,
+        };
+
+        let key = GenericArray::from_slice(&message_key.0);
+        let nonce = GenericArray::from_slice(&message_key.1[0..12]);
+
+        let cipher = Aes256Gcm::new(*key);
+        cipher.encrypt(&nonce, payload).ok()
+    }
+
     pub fn encrypt_message(&mut self, plaintext: &[u8], associated_data: &X3DHAD) -> Vec<u8> {
         let message_key = self
             .sending_chain_key
@@ -128,16 +145,8 @@ impl DoubleRatchetClient {
 
         let associated_data =
             DoubleRatchetClient::build_associated_data(associated_data, &message_header);
-        let payload = Payload {
-            msg: plaintext,
-            aad: &associated_data,
-        };
-
-        let key = GenericArray::from_slice(&message_key.0);
-        let nonce = GenericArray::from_slice(&message_key.1);
-
-        let cipher = Aes256Gcm::new(*key);
-        let ciphertext = cipher.encrypt(&nonce, payload).unwrap();
+        let ciphertext =
+            DoubleRatchetClient::encrypt(message_key, plaintext, &associated_data).unwrap();
         bincode::serialize(&DoubleRatchetMessage {
             header: message_header,
             ciphertext: ciphertext,
@@ -180,7 +189,7 @@ impl DoubleRatchetClient {
         };
 
         let key = GenericArray::from_slice(&message_key.0);
-        let nonce = GenericArray::from_slice(&message_key.1);
+        let nonce = GenericArray::from_slice(&message_key.1[0..12]);
 
         let cipher = Aes256Gcm::new(*key);
         cipher.decrypt(&nonce, payload).ok()
