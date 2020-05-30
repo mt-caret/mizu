@@ -30,7 +30,7 @@ provide forward secrecy.
 
 ### postal boxes and discovery requests
 
-Each user has associated with it a postal box (which is public) and a list of
+Each user has associated with it a **postal box** (which is public) and a list of
 contacts (which is private). When sending a message, the user will encrypt
 the message with recipient's identity and add it their own postal box.
 Periodically, Mizu will check the postal boxes of each identity in its
@@ -42,7 +42,7 @@ TODO: define "periodically"
 Say Alice wants to communicate with Bob. If Bob is aware of this,
 both Alice and Bob can manually add each other's identities to their contact
 lists. However, if Bob is not aware of Alice, communication can be initiated
-from Alice by sending a *discovery request* message solely consisting of her
+from Alice by sending a **discovery request** message solely consisting of her
 identity encrypted with Bob's public key. Bob can then choose to add Alice to his
 contact list and start communicating.
 
