@@ -204,10 +204,6 @@ impl X3DHClient {
 mod tests {
     use super::*;
     use rand::rngs::OsRng;
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
 
     #[quickcheck]
     fn x3dh_key_agreement(message_content: Vec<u8>) -> bool {
