@@ -58,6 +58,16 @@ impl PrekeyKeyPair {
     pub fn dh(&self, public_key: &PublicKey) -> SharedSecret {
         self.private_key.diffie_hellman(public_key)
     }
+
+    // TODO: depending on how Double Ratchet works, it may be possible to
+    // change this to move self instead of borrowing it in order to prevent
+    // key reuse. Should investigate.
+    pub fn convert_to_ratchet_keypair(&self) -> RatchetKeyPair {
+        RatchetKeyPair {
+            private_key: self.private_key.clone(),
+            public_key: RatchetPublicKey(self.public_key.0),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -88,7 +98,7 @@ impl RatchetKeyPair {
     }
 }
 
-pub struct RootKey([u8; 32]);
+pub struct RootKey(pub [u8; 32]);
 
 static INFO_RK: &'static [u8; 19] = b"MizuProtocolRootKey";
 
@@ -107,7 +117,8 @@ impl RootKey {
 }
 
 pub struct ChainKey([u8; 32]);
-pub struct MessageKey([u8; 32]);
+// Key material for the nonce used in AEAD is bundled along with message key
+pub struct MessageKey(pub [u8; 32], pub [u8; 32]);
 
 impl ChainKey {
     fn hmac(key: &[u8], input: &[u8]) -> [u8; 32] {
@@ -119,7 +130,14 @@ impl ChainKey {
     // update ChainKey and return the next MessageKey
     pub fn kdf(&mut self) -> MessageKey {
         let mk = ChainKey::hmac(&self.0, &[1]);
+
+        // While deriving the nonce from the chain key is suggested by
+        // the Double Ratchet spec, how it should be derived is not specified.
+        // Here, we do it by passing in a different input to the HMAC keyed by
+        // the chain key.
+        let nonce = ChainKey::hmac(&self.0, &[3]);
+
         self.0 = ChainKey::hmac(&self.0, &[2]);
-        MessageKey(mk)
+        MessageKey(mk, nonce)
     }
 }

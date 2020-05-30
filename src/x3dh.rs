@@ -18,7 +18,7 @@ pub struct X3DHClient {
     prekey: PrekeyKeyPair,
 }
 
-pub struct X3DHSecretKey([u8; 32]);
+pub struct X3DHSecretKey(pub [u8; 32]);
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct InitialMessage {
@@ -40,7 +40,7 @@ pub struct InitialMessage {
     ciphertext: Vec<u8>,
 }
 
-pub struct X3DHAD(Vec<u8>);
+pub struct X3DHAD(pub Vec<u8>);
 
 impl X3DHClient {
     pub fn new<R: CryptoRng + RngCore>(mut csprng: &mut R) -> X3DHClient {

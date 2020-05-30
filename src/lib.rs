@@ -13,5 +13,6 @@ extern crate quickcheck;
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
 
+pub mod double_ratchet;
 pub mod keys;
 pub mod x3dh;
