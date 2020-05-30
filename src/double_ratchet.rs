@@ -273,8 +273,8 @@ mod tests {
             receiver_info,
         );
 
-        // We assume that Alice and Bob agree upon some secret key through the
-        // X3DH protocol.
+        // We assume that Alice and Bob have already agreed upon some secret
+        // key here.
         let mut secret_key = [0u8; 32];
         csprng.fill_bytes(&mut secret_key);
 
