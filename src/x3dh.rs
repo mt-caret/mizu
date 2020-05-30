@@ -40,6 +40,8 @@ pub struct InitialMessage {
     ciphertext: Vec<u8>,
 }
 
+pub struct X3DHAD(Vec<u8>);
+
 impl X3DHClient {
     pub fn new<R: CryptoRng + RngCore>(mut csprng: &mut R) -> X3DHClient {
         let identity_key = IdentityKeyPair::new(&mut csprng);
@@ -104,14 +106,16 @@ impl X3DHClient {
         receiver_key: &IdentityPublicKey,
         sender_info: &[u8],
         receiver_info: &[u8],
-    ) -> Vec<u8> {
-        [
-            sender_key.0.as_bytes(),
-            receiver_key.0.as_bytes(),
-            sender_info,
-            receiver_info,
-        ]
-        .concat()
+    ) -> X3DHAD {
+        X3DHAD(
+            [
+                sender_key.0.as_bytes(),
+                receiver_key.0.as_bytes(),
+                sender_info,
+                receiver_info,
+            ]
+            .concat(),
+        )
     }
 
     pub fn construct_initial_message(
@@ -119,9 +123,7 @@ impl X3DHClient {
         content: &[u8],
         secret_key: &X3DHSecretKey,
         ephemeral_key: &EphemeralPublicKey,
-        receiver_key: &IdentityPublicKey,
-        sender_info: &[u8],
-        receiver_info: &[u8],
+        associated_data: X3DHAD,
     ) -> Vec<u8> {
         // TODO: I think runnin the secret through the kdf and using the
         // outputs this way is valid; should check libsignal sources and
@@ -129,15 +131,9 @@ impl X3DHClient {
         let [key, _, nonce_base] = X3DHClient::kdf(&secret_key.0);
         let key = GenericArray::from_slice(&key);
         let nonce = GenericArray::from_slice(&nonce_base[0..12]);
-        let aad = X3DHClient::build_associated_data(
-            &self.identity_key.public_key,
-            receiver_key,
-            sender_info,
-            receiver_info,
-        );
         let payload = Payload {
             msg: content,
-            aad: &aad,
+            aad: &associated_data.0,
         };
 
         // One pitfall when using AES in GCM mode is nonce reuse;
@@ -183,7 +179,7 @@ impl X3DHClient {
         let [key, _, nonce_base] = X3DHClient::kdf(&secret_key);
         let key = GenericArray::from_slice(&key);
         let nonce = GenericArray::from_slice(&nonce_base[0..12]);
-        let aad = X3DHClient::build_associated_data(
+        let associated_data = X3DHClient::build_associated_data(
             &message.identity_key,
             &self.identity_key.public_key,
             sender_info,
@@ -191,7 +187,7 @@ impl X3DHClient {
         );
         let payload = Payload {
             msg: &message.ciphertext,
-            aad: &aad,
+            aad: &associated_data.0,
         };
         let cipher = Aes256Gcm::new(*key);
         let plaintext = cipher.decrypt(&nonce, payload).ok()?;
@@ -220,13 +216,17 @@ mod tests {
         );
         let sender_info = b"alice";
         let receiver_info = b"bob";
+        let associated_data = X3DHClient::build_associated_data(
+            &alice.identity_key.public_key,
+            &bob.identity_key.public_key,
+            sender_info,
+            receiver_info,
+        );
         let encrypted_message = alice.construct_initial_message(
             &message_content,
             &alice_sk,
             &alice_ek,
-            &bob.identity_key.public_key,
-            sender_info,
-            receiver_info,
+            associated_data,
         );
 
         // Bob then gets an encrypted message, and proceeds to derive the
