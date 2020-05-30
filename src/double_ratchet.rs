@@ -193,21 +193,25 @@ impl DoubleRatchetClient {
             DoubleRatchetClient::build_associated_data(associated_data, &message.header);
 
         // If the message header indicates a skipped message, remove the
-        // corresponding message key, decrypt with it, and return.
-        if let Some(message_key) = self.skipped_messages.remove(&SkippedMessagesKey(
+        // corresponding message key, decrypt with it, and return. Remove
+        // messages from self.skipped_messages only if decryption succeeds.
+        let hashmap_key = SkippedMessagesKey(
             message.header.ratchet_public_key.clone(),
             message.header.sent_count,
-        )) {
-            return DoubleRatchetClient::decrypt(
-                message_key,
+        );
+        if let Some(message_key) = self.skipped_messages.get(&hashmap_key) {
+            let plaintext = DoubleRatchetClient::decrypt(
+                message_key.clone(),
                 &message.ciphertext,
                 &associated_data,
-            );
+            )?;
+            assert!(self.skipped_messages.remove(&hashmap_key).is_some());
+            return Some(plaintext);
         }
 
         let mut new_state = self.clone();
 
-        // If the message has a new RatchetPublicKey, commence the DH ratchet.
+        // If the message has a new RatchetPublicKey, perform the DH ratchet.
         if Some(&message.header.ratchet_public_key) != new_state.receiving_ratchet_key.as_ref() {
             new_state.skip_message_keys(message.header.previous_sending_chain_count)?;
 
@@ -238,6 +242,7 @@ impl DoubleRatchetClient {
             DoubleRatchetClient::decrypt(message_key, &message.ciphertext, &associated_data)?;
         new_state.received_count += 1;
 
+        // Persist changes to the state only if decryption is successful.
         *self = new_state;
         Some(plaintext)
     }
