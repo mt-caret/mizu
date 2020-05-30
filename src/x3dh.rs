@@ -14,8 +14,8 @@ static INFO: &'static [u8; 12] = b"MizuProtocol";
 pub struct X3DHClient {
     // We omit the one-time prekey here, since we trust the Tezos blockchain
     // to not "replay" messages.
-    identity_key: IdentityKeyPair,
-    prekey: PrekeyKeyPair,
+    pub identity_key: IdentityKeyPair,
+    pub prekey: PrekeyKeyPair,
 }
 
 pub struct X3DHSecretKey(pub [u8; 32]);

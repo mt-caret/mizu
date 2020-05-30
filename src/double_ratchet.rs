@@ -1,4 +1,6 @@
-use crate::keys::{ChainKey, MessageKey, PrekeyKeyPair, RatchetKeyPair, RatchetPublicKey, RootKey};
+use crate::keys::{
+    ChainKey, MessageKey, PrekeyKeyPair, PrekeyPublicKey, RatchetKeyPair, RatchetPublicKey, RootKey,
+};
 use crate::x3dh::{X3DHSecretKey, X3DHAD};
 use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead, Payload};
 use aes_gcm::Aes256Gcm;
@@ -53,8 +55,9 @@ impl DoubleRatchetClient {
     pub fn initiate<R: CryptoRng + RngCore>(
         mut csprng: &mut R,
         secret_key: X3DHSecretKey,
-        receiving_ratchet_key: RatchetPublicKey,
+        recipient_prekey: &PrekeyPublicKey,
     ) -> DoubleRatchetClient {
+        let receiving_ratchet_key = recipient_prekey.convert_to_ratchet_public_key();
         let sending_ratchet_keypair = RatchetKeyPair::new(&mut csprng);
 
         // Here, we view the secret key derived from the X3DH key agreement
@@ -100,17 +103,17 @@ impl DoubleRatchetClient {
     }
 
     fn build_associated_data(
-        x3dh_ad: X3DHAD,
+        x3dh_ad: &X3DHAD,
         message_header: &DoubleRatchetMessageHeader,
     ) -> Vec<u8> {
-        [x3dh_ad.0, bincode::serialize(&message_header).unwrap()].concat()
+        [
+            x3dh_ad.0.clone(),
+            bincode::serialize(&message_header).unwrap(),
+        ]
+        .concat()
     }
 
-    pub fn encrypt_message(
-        &mut self,
-        plaintext: &[u8],
-        associated_data: X3DHAD,
-    ) -> DoubleRatchetMessage {
+    pub fn encrypt_message(&mut self, plaintext: &[u8], associated_data: &X3DHAD) -> Vec<u8> {
         let message_key = self
             .sending_chain_key
             .as_mut()
@@ -135,10 +138,11 @@ impl DoubleRatchetClient {
 
         let cipher = Aes256Gcm::new(*key);
         let ciphertext = cipher.encrypt(&nonce, payload).unwrap();
-        DoubleRatchetMessage {
+        bincode::serialize(&DoubleRatchetMessage {
             header: message_header,
             ciphertext: ciphertext,
-        }
+        })
+        .unwrap()
     }
 
     fn skip_message_keys(&mut self, until: u64) -> Option<()> {
@@ -186,11 +190,11 @@ impl DoubleRatchetClient {
         &mut self,
         mut csprng: &mut R,
         serialized_message: &[u8],
-        associated_data: X3DHAD,
+        associated_data: &X3DHAD,
     ) -> Option<Vec<u8>> {
         let message: DoubleRatchetMessage = bincode::deserialize(serialized_message).ok()?;
         let associated_data =
-            DoubleRatchetClient::build_associated_data(associated_data, &message.header);
+            DoubleRatchetClient::build_associated_data(&associated_data, &message.header);
 
         // If the message header indicates a skipped message, remove the
         // corresponding message key, decrypt with it, and return. Remove
@@ -245,5 +249,46 @@ impl DoubleRatchetClient {
         // Persist changes to the state only if decryption is successful.
         *self = new_state;
         Some(plaintext)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::x3dh::X3DHClient;
+    use rand::rngs::OsRng;
+
+    #[quickcheck]
+    fn double_ratchet_one_message_works(message_content: Vec<u8>) -> bool {
+        let mut csprng = OsRng;
+        let alice_x3dh = X3DHClient::new(&mut csprng);
+        let bob_x3dh = X3DHClient::new(&mut csprng);
+
+        let sender_info = b"alice";
+        let receiver_info = b"bob";
+        let associated_data = X3DHClient::build_associated_data(
+            &alice_x3dh.identity_key.public_key,
+            &bob_x3dh.identity_key.public_key,
+            sender_info,
+            receiver_info,
+        );
+
+        // We assume that Alice and Bob agree upon some secret key through the
+        // X3DH protocol.
+        let mut secret_key = [0u8; 32];
+        csprng.fill_bytes(&mut secret_key);
+
+        let mut alice = DoubleRatchetClient::initiate(
+            &mut csprng,
+            X3DHSecretKey(secret_key.clone()),
+            &bob_x3dh.prekey.public_key,
+        );
+        let message = alice.encrypt_message(&message_content, &associated_data);
+
+        let mut bob = DoubleRatchetClient::respond(X3DHSecretKey(secret_key), &bob_x3dh.prekey);
+        let decrypted_message =
+            bob.attempt_message_decryption(&mut csprng, &message, &associated_data);
+
+        decrypted_message == Some(message_content)
     }
 }

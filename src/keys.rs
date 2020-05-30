@@ -45,6 +45,12 @@ pub struct PrekeyKeyPair {
     pub public_key: PrekeyPublicKey,
 }
 
+impl PrekeyPublicKey {
+    pub fn convert_to_ratchet_public_key(&self) -> RatchetPublicKey {
+        RatchetPublicKey(self.0)
+    }
+}
+
 impl PrekeyKeyPair {
     pub fn new<R: CryptoRng + RngCore>(mut csprng: &mut R) -> PrekeyKeyPair {
         let private_key = StaticSecret::new(&mut csprng);
@@ -65,7 +71,7 @@ impl PrekeyKeyPair {
     pub fn convert_to_ratchet_keypair(&self) -> RatchetKeyPair {
         RatchetKeyPair {
             private_key: self.private_key.clone(),
-            public_key: RatchetPublicKey(self.public_key.0),
+            public_key: self.public_key.convert_to_ratchet_public_key(),
         }
     }
 }
