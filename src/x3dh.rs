@@ -139,6 +139,12 @@ impl X3DHClient {
             msg: content,
             aad: &aad,
         };
+
+        // One pitfall when using AES in GCM mode is nonce reuse;
+        // we can be reasonably sure this will not happen as the nonce
+        // is derived from a KDF which in turn is th result of contains
+        // input from an ephemeral keypair that we have randomly generated
+        // just before.
         let cipher = Aes256Gcm::new(*key);
         let ciphertext = cipher.encrypt(&nonce, payload).unwrap();
 

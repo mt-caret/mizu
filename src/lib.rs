@@ -1,6 +1,7 @@
 extern crate aes_gcm;
 extern crate bincode;
 extern crate hkdf;
+extern crate hmac;
 extern crate rand;
 extern crate serde;
 extern crate sha2;
