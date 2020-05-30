@@ -202,7 +202,7 @@ mod tests {
     use rand::rngs::OsRng;
 
     #[quickcheck]
-    fn x3dh_key_agreement(message_content: Vec<u8>) -> bool {
+    fn x3dh_key_agreement_works(message_content: Vec<u8>) -> bool {
         let mut csprng = OsRng;
         let alice = X3DHClient::new(&mut csprng);
         let bob = X3DHClient::new(&mut csprng);
@@ -239,5 +239,19 @@ mod tests {
         // with the same secret key and the decrypted message should match
         // the original message.
         alice_sk.0 == bob_sk.0 && message_content == decrypted_message
+    }
+
+    // Let's say Mallory sends Bob a bunch of junk. Can Bob gracefully handle
+    // this?
+    #[quickcheck]
+    fn x3dh_handles_failure_gracefully(junk_message: Vec<u8>) -> bool {
+        let mut csprng = OsRng;
+        let bob = X3DHClient::new(&mut csprng);
+
+        let sender_info = b"mallory";
+        let receiver_info = b"bob";
+
+        bob.decrypt_initial_message(&junk_message, sender_info, receiver_info)
+            .is_none()
     }
 }
