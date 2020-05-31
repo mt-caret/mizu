@@ -147,6 +147,9 @@ impl DoubleRatchetClient {
             DoubleRatchetClient::build_associated_data(associated_data, &message_header);
         let ciphertext =
             DoubleRatchetClient::encrypt(message_key, plaintext, &associated_data).unwrap();
+
+        self.sent_count += 1;
+
         bincode::serialize(&DoubleRatchetMessage {
             header: message_header,
             ciphertext: ciphertext,
