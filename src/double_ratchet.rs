@@ -265,19 +265,20 @@ impl DoubleRatchetClient {
 mod tests {
     use super::*;
     use crate::x3dh::X3DHClient;
+    use quickcheck::{Arbitrary, Gen};
+    use rand::prelude::SliceRandom;
     use rand::rngs::OsRng;
 
-    #[quickcheck]
-    fn double_ratchet_one_message_works(message_content: Vec<u8>) -> bool {
+    fn stub_x3dh() -> (X3DHClient, X3DHClient, X3DHSecretKey, X3DHAD) {
         let mut csprng = OsRng;
-        let alice_x3dh = X3DHClient::new(&mut csprng);
-        let bob_x3dh = X3DHClient::new(&mut csprng);
+        let alice = X3DHClient::new(&mut csprng);
+        let bob = X3DHClient::new(&mut csprng);
 
         let sender_info = b"alice";
         let receiver_info = b"bob";
         let associated_data = X3DHClient::build_associated_data(
-            &alice_x3dh.identity_key.public_key,
-            &bob_x3dh.identity_key.public_key,
+            &alice.identity_key.public_key,
+            &bob.identity_key.public_key,
             sender_info,
             receiver_info,
         );
@@ -286,18 +287,94 @@ mod tests {
         // key here.
         let mut secret_key = [0u8; 32];
         csprng.fill_bytes(&mut secret_key);
+        (alice, bob, X3DHSecretKey(secret_key), associated_data)
+    }
+
+    fn copy_x3dh_secret_key(secret_key: &X3DHSecretKey) -> X3DHSecretKey {
+        // We implement a weird cloning function here instead of deriving
+        // Clone on X3DHSecretKey, as normal usage should never require cloning.
+        X3DHSecretKey(secret_key.0.clone())
+    }
+
+    #[quickcheck]
+    fn double_ratchet_one_message_works(message_content: Vec<u8>) -> bool {
+        let mut csprng = OsRng;
+        let (_alice_x3dh, bob_x3dh, secret_key, associated_data) = stub_x3dh();
 
         let mut alice = DoubleRatchetClient::initiate(
             &mut csprng,
-            X3DHSecretKey(secret_key.clone()),
+            copy_x3dh_secret_key(&secret_key),
             &bob_x3dh.prekey.public_key,
         );
         let message = alice.encrypt_message(&message_content, &associated_data);
 
-        let mut bob = DoubleRatchetClient::respond(X3DHSecretKey(secret_key), &bob_x3dh.prekey);
+        let mut bob = DoubleRatchetClient::respond(secret_key, &bob_x3dh.prekey);
         let decrypted_message =
             bob.attempt_message_decryption(&mut csprng, &message, &associated_data);
 
         decrypted_message == Some(message_content)
+    }
+
+    #[derive(Debug, Clone)]
+    enum Sender {
+        Alice,
+        Bob,
+    }
+
+    impl Arbitrary for Sender {
+        fn arbitrary<G: Gen>(mut g: &mut G) -> Self {
+            [Sender::Alice, Sender::Bob]
+                .choose(&mut g)
+                .expect("choose value")
+                .clone()
+        }
+    }
+
+    #[quickcheck]
+    fn double_ratchet_multiple_messages_works(
+        message_content: Vec<u8>,
+        sender_order: Vec<Sender>,
+    ) -> bool {
+        let mut csprng = OsRng;
+        let (_alice_x3dh, bob_x3dh, secret_key, associated_data) = stub_x3dh();
+
+        // We use an empty message here, since the first message is already
+        // covered by the double_ratchet_one_message_works quickcheck test.
+        let empty_message = Vec::new();
+
+        let mut alice = DoubleRatchetClient::initiate(
+            &mut csprng,
+            copy_x3dh_secret_key(&secret_key),
+            &bob_x3dh.prekey.public_key,
+        );
+        let message = alice.encrypt_message(&empty_message, &associated_data);
+
+        let mut bob = DoubleRatchetClient::respond(secret_key, &bob_x3dh.prekey);
+        let decrypted_message =
+            bob.attempt_message_decryption(&mut csprng, &message, &associated_data);
+
+        assert_eq!(decrypted_message, Some(empty_message));
+
+        let mut decrypted_messages = Vec::new();
+        for sender in sender_order.iter() {
+            match sender {
+                Sender::Alice => {
+                    let message = alice.encrypt_message(&message_content, &associated_data);
+                    let decrypted_message =
+                        bob.attempt_message_decryption(&mut csprng, &message, &associated_data);
+                    decrypted_messages.push(decrypted_message);
+                }
+                Sender::Bob => {
+                    let message = bob.encrypt_message(&message_content, &associated_data);
+                    let decrypted_message =
+                        alice.attempt_message_decryption(&mut csprng, &message, &associated_data);
+                    decrypted_messages.push(decrypted_message);
+                }
+            }
+        }
+
+        decrypted_messages
+            .iter()
+            .all(|decrypted_message| decrypted_message.as_ref() == Some(&message_content))
     }
 }

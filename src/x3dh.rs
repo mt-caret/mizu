@@ -157,6 +157,9 @@ impl X3DHClient {
         // If it is, then anybody can see which types of messages are being
         // sent, which when combined with message size, can be considered to
         // be a case of nontrivial metadata leakage.
+        //
+        // How bincode works seems pretty straightforward:
+        // http://tyoverby.com/posts/bincode_release.html
         bincode::serialize(&message).unwrap()
     }
 
