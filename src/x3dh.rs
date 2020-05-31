@@ -1,3 +1,4 @@
+use crate::error::CryptoError;
 use crate::keys::{
     EphemeralPublicKey, IdentityKeyPair, IdentityPublicKey, PrekeyKeyPair, PrekeyPublicKey,
 };
@@ -176,11 +177,14 @@ impl X3DHClient {
         message: &[u8],
         sender_info: &[u8],
         receiver_info: &[u8],
-    ) -> Option<(X3DHSecretKey, Vec<u8>)> {
+    ) -> Result<(X3DHSecretKey, Vec<u8>), CryptoError> {
         // TODO: Is it safe to blindly trust identity_key provided in this
         // message, or does it open us to attacks?
-        // CR pandaman: return an error instead of None for debuggability
-        let message: InitialMessage = bincode::deserialize(message).ok()?;
+        // XCR pandaman: return an error instead of None for debuggability
+        //
+        // mtakeda: fixed.
+        let message: InitialMessage = bincode::deserialize(message)
+            .map_err(|err| CryptoError::Deserialization("InitialMessage".to_string(), *err))?;
 
         let dh1 = *self.prekey.dh(&message.identity_key.0).as_bytes();
         let dh2 = *self.identity_key.dh_ek(&message.ephemeral_key).as_bytes();
@@ -202,10 +206,14 @@ impl X3DHClient {
             aad: &associated_data.0,
         };
         let cipher = Aes256Gcm::new(*key);
-        // CR pandaman: return an error instead of None for debuggability
-        let plaintext = cipher.decrypt(&nonce, payload).ok()?;
+        // XCR pandaman: return an error instead of None for debuggability
+        //
+        // mtakeda: fixed.
+        let plaintext = cipher
+            .decrypt(&nonce, payload)
+            .map_err(|_| CryptoError::AEADDecryption("InitialMessage".to_string()))?;
 
-        Some((X3DHSecretKey(secret_key), plaintext))
+        Ok((X3DHSecretKey(secret_key), plaintext))
     }
 }
 
@@ -265,6 +273,6 @@ mod tests {
         let receiver_info = b"bob";
 
         bob.decrypt_initial_message(&junk_message, sender_info, receiver_info)
-            .is_none()
+            .is_err()
     }
 }

@@ -3,6 +3,7 @@
 extern crate quickcheck_macros;
 
 pub mod double_ratchet;
+pub mod error;
 pub mod keys;
 pub mod x3dh;
 

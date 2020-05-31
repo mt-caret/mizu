@@ -1,3 +1,4 @@
+use crate::error::CryptoError;
 use crate::keys::{
     ChainKey, MessageKey, PrekeyKeyPair, PrekeyPublicKey, RatchetKeyPair, RatchetPublicKey, RootKey,
 };
@@ -140,7 +141,11 @@ impl DoubleRatchetClient {
         cipher.encrypt(&nonce, payload)
     }
 
-    pub fn encrypt_message(&mut self, plaintext: &[u8], associated_data: &X3DHAD) -> Vec<u8> {
+    pub fn encrypt_message(
+        &mut self,
+        plaintext: &[u8],
+        associated_data: &X3DHAD,
+    ) -> Result<Vec<u8>, CryptoError> {
         let message_key = self
             .sending_chain_key
             .as_mut()
@@ -155,23 +160,27 @@ impl DoubleRatchetClient {
 
         let associated_data =
             DoubleRatchetClient::build_associated_data(associated_data, &message_header);
-        // CR pandaman: document panic-freeness
-        let ciphertext =
-            DoubleRatchetClient::encrypt(message_key, plaintext, &associated_data).unwrap();
+        // XCR pandaman: document panic-freeness
+        //
+        // mtakeda: fixed.
+        let ciphertext = DoubleRatchetClient::encrypt(message_key, plaintext, &associated_data)
+            .map_err(|_| CryptoError::AEADEncryption("DoubleRatchetMessage".to_string()))?;
 
         self.sent_count += 1;
 
-        // CR pandaman: document panic-freeness
+        // XCR pandaman: document panic-freeness
+        //
+        // mtakeda: fixed.
         bincode::serialize(&DoubleRatchetMessage {
             header: message_header,
             ciphertext: ciphertext,
         })
-        .unwrap()
+        .map_err(|err| CryptoError::Serialization("DoubleRatchetMessage".to_string(), *err))
     }
 
-    fn skip_message_keys(&mut self, until: u64) -> Option<()> {
+    fn skip_message_keys(&mut self, until: u64) -> Result<(), CryptoError> {
         if self.received_count + MAX_SKIP < until {
-            return None;
+            return Err(CryptoError::TooManySkippedMessages);
         }
 
         if let Some(receiving_chain_key) = self.receiving_chain_key.as_mut() {
@@ -190,7 +199,7 @@ impl DoubleRatchetClient {
                 self.received_count += 1;
             }
         }
-        Some(())
+        Ok(())
     }
 
     fn decrypt(
@@ -209,7 +218,7 @@ impl DoubleRatchetClient {
         let cipher = Aes256Gcm::new(*key);
         // XCR pandaman: return an error instead of None for debuggability
         //
-        // CR mtakeda: fixed here, but I've pushed down the ok() call to
+        // mtakeda: fixed here, but I've pushed down the ok() call to
         // attempt_message_decryption. Let's address the problem over there.
         cipher.decrypt(&nonce, payload)
     }
@@ -219,9 +228,14 @@ impl DoubleRatchetClient {
         csprng: &mut R,
         serialized_message: &[u8],
         associated_data: &X3DHAD,
-    ) -> Option<Vec<u8>> {
-        // CR pandaman: return an error instead of None for debuggability
-        let message: DoubleRatchetMessage = bincode::deserialize(serialized_message).ok()?;
+    ) -> Result<Vec<u8>, CryptoError> {
+        // XCR pandaman: return an error instead of None for debuggability
+        //
+        // mtakeda: fixed.
+        let message: DoubleRatchetMessage =
+            bincode::deserialize(serialized_message).map_err(|err| {
+                CryptoError::Deserialization("DoubleRatchetMessage".to_string(), *err)
+            })?;
         let associated_data =
             DoubleRatchetClient::build_associated_data(&associated_data, &message.header);
 
@@ -233,15 +247,14 @@ impl DoubleRatchetClient {
             message.header.sent_count,
         );
         if let Some(message_key) = self.skipped_messages.get(&hashmap_key) {
-            // CR mtakeda: return an error instead of None for debuggability
             let plaintext = DoubleRatchetClient::decrypt(
                 message_key.clone(),
                 &message.ciphertext,
                 &associated_data,
             )
-            .ok()?;
+            .map_err(|_| CryptoError::AEADDecryption("DoubleRatchetMessage".to_string()))?;
             assert!(self.skipped_messages.remove(&hashmap_key).is_some());
-            return Some(plaintext);
+            return Ok(plaintext);
         }
 
         let mut new_state = self.clone();
@@ -273,15 +286,14 @@ impl DoubleRatchetClient {
 
         new_state.skip_message_keys(message.header.sent_count)?;
         let message_key = new_state.receiving_chain_key.as_mut().unwrap().kdf();
-        // CR mtakeda: return an error instead of None for debuggability
         let plaintext =
             DoubleRatchetClient::decrypt(message_key, &message.ciphertext, &associated_data)
-                .ok()?;
+                .map_err(|_| CryptoError::AEADDecryption("DoubleRatchetMessage".to_string()))?;
         new_state.received_count += 1;
 
         // Persist changes to the state only if decryption is successful.
         *self = new_state;
-        Some(plaintext)
+        Ok(plaintext)
     }
 }
 
@@ -330,13 +342,16 @@ mod tests {
             copy_x3dh_secret_key(&secret_key),
             &bob_x3dh.prekey.public_key,
         );
-        let message = alice.encrypt_message(&message_content, &associated_data);
+        let message = alice
+            .encrypt_message(&message_content, &associated_data)
+            .expect("encryption should succeed");
 
         let mut bob = DoubleRatchetClient::respond(secret_key, &bob_x3dh.prekey);
-        let decrypted_message =
-            bob.attempt_message_decryption(&mut csprng, &message, &associated_data);
+        let decrypted_message = bob
+            .attempt_message_decryption(&mut csprng, &message, &associated_data)
+            .expect("decryption should succeed");
 
-        decrypted_message == Some(message_content)
+        decrypted_message == message_content
     }
 
     #[derive(Debug, Clone)]
@@ -382,36 +397,43 @@ mod tests {
             copy_x3dh_secret_key(&secret_key),
             &bob_x3dh.prekey.public_key,
         );
-        let message = alice.encrypt_message(&empty_message, &associated_data);
+        let message = alice
+            .encrypt_message(&empty_message, &associated_data)
+            .expect("encryption should succeed");
 
         let mut bob = DoubleRatchetClient::respond(secret_key, &bob_x3dh.prekey);
-        let decrypted_message =
-            bob.attempt_message_decryption(&mut csprng, &message, &associated_data);
+        let decrypted_message = bob
+            .attempt_message_decryption(&mut csprng, &message, &associated_data)
+            .expect("decryption should succeed");
 
-        assert_eq!(decrypted_message, Some(empty_message));
+        assert_eq!(decrypted_message, empty_message);
 
         let mut decrytion_results = Vec::new();
         for sender in sender_order.iter() {
             match sender {
                 Sender::Alice(delivered) => {
-                    let message = alice.encrypt_message(&message_content, &associated_data);
+                    let message = alice
+                        .encrypt_message(&message_content, &associated_data)
+                        .expect("encryption should succeed");
                     if *delivered {
                         let decrypted_message =
                             bob.attempt_message_decryption(&mut csprng, &message, &associated_data);
-                        decrytion_results.push(decrypted_message);
+                        decrytion_results.push(decrypted_message.ok());
                     } else {
                         decrytion_results.push(None);
                     }
                 }
                 Sender::Bob(delivered) => {
-                    let message = bob.encrypt_message(&message_content, &associated_data);
+                    let message = bob
+                        .encrypt_message(&message_content, &associated_data)
+                        .expect("encryption should succeed");
                     if *delivered {
                         let decrypted_message = alice.attempt_message_decryption(
                             &mut csprng,
                             &message,
                             &associated_data,
                         );
-                        decrytion_results.push(decrypted_message);
+                        decrytion_results.push(decrypted_message.ok());
                     } else {
                         decrytion_results.push(None);
                     }
