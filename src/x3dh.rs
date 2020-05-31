@@ -47,8 +47,8 @@ impl X3DHClient {
         let identity_key = IdentityKeyPair::new(csprng);
         let prekey = PrekeyKeyPair::new(csprng);
         X3DHClient {
-            identity_key: identity_key,
-            prekey: prekey,
+            identity_key,
+            prekey,
         }
 
         // TODO: publish keys to smart contract?

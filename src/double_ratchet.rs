@@ -70,9 +70,9 @@ impl DoubleRatchetClient {
         let sending_chain_key = root_key.kdf(shared_secret);
 
         DoubleRatchetClient {
-            sending_ratchet_keypair: sending_ratchet_keypair,
+            sending_ratchet_keypair,
             receiving_ratchet_key: Some(receiving_ratchet_key),
-            root_key: root_key,
+            root_key,
             sending_chain_key: Some(sending_chain_key),
             receiving_chain_key: None,
             sent_count: 0,
@@ -90,9 +90,9 @@ impl DoubleRatchetClient {
         let root_key = RootKey(secret_key.0);
 
         DoubleRatchetClient {
-            sending_ratchet_keypair: sending_ratchet_keypair,
+            sending_ratchet_keypair,
             receiving_ratchet_key: None,
-            root_key: root_key,
+            root_key,
             sending_chain_key: None,
             receiving_chain_key: None,
             sent_count: 0,

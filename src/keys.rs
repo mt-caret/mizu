@@ -20,8 +20,8 @@ impl IdentityKeyPair {
         let private_key = StaticSecret::new(csprng);
         let public_key = IdentityPublicKey(PublicKey::from(&private_key));
         IdentityKeyPair {
-            private_key: private_key,
-            public_key: public_key,
+            private_key,
+            public_key,
         }
     }
 
@@ -56,8 +56,8 @@ impl PrekeyKeyPair {
         let private_key = StaticSecret::new(csprng);
         let public_key = PrekeyPublicKey(PublicKey::from(&private_key));
         PrekeyKeyPair {
-            private_key: private_key,
-            public_key: public_key,
+            private_key,
+            public_key,
         }
     }
 
@@ -107,8 +107,8 @@ impl RatchetKeyPair {
         let private_key = StaticSecret::new(csprng);
         let public_key = RatchetPublicKey(PublicKey::from(&private_key));
         RatchetKeyPair {
-            private_key: private_key,
-            public_key: public_key,
+            private_key,
+            public_key,
         }
     }
 
