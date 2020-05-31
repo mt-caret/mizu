@@ -111,7 +111,7 @@ impl DoubleRatchetClient {
         // mtakeda: done.
         [
             x3dh_ad.0.clone(),
-            // The only values that are serialized here (the fields of
+            // The only values that are serialized here (i.e. the fields of
             // DoubleRatchetMessageHeader) are u64s and a RatchetPublicKey
             // which is just an array of bytes, so it's probably safe to
             // unwrap() this.
