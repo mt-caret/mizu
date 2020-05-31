@@ -5,20 +5,8 @@
 Mizu is an experiment to explore what secure, private, and asynchronous
 messaging might look on the blockchain.
 Mizu is similar to email combined with PGP, while being forward secure and
-mimimizing information leakage, similar to
+tries to minimize information leakage, similar to
 [Pond](https://web.archive.org/web/20151101081526/https://pond.imperialviolet.org/).
-
-## security, asynchronicity, forward security, and minimization of information leakage
-
-- security: TODO
-- asynchronicity: TODO
-- forward security: TODO
-- minimization of information leakage: TODO
-
-TODO: does Mizu really minimize traffic leakage?
-TODO: operations on smart contracts require authentication of address, this
-      will most likely leak information (ex. Alice posting a Discovery message to
-      Bob show Alice paid for it, linking Bob and Alice together)
 
 ## how does Mizu work?
 
@@ -106,19 +94,11 @@ contacted over Tor. However, care must be taken so each read and write
 are sufficiently distributed accross space (originate from differing Tor exit
 nodes) and time to make correlation difficult.
 
-## why not Pond?
-
-TODO
-
-- pond is deprecated in favor of Signal
-
-TODO
-
-- identity and the spam issue
-
-TODO
-
 ## why not [Signal](https://signal.org/)?
+
+Signal is a messaging application for smartphones which provides
+various desireable properties (end-to-end encryption, forward and future
+secrecy, deniability) with respect to security.
 
 While I agree Signal should be your first choice when looking for a secure
 messenger, it has different design goals from Mizu.
@@ -127,10 +107,41 @@ messenger, it has different design goals from Mizu.
 
 Signal identifies users by their phone number, making it almost impossible to
 communicate without revealing your identity and/or your location.
+This is partly by design, as minimizing information leakage is probably not
+one of the goals of Signal.
 
 - [Signal is centralized and the server is closed source](https://signal.org/blog/the-ecosystem-is-moving/)
 
-TODO
+While I think the reasons behind this decision are valid, I believe there are
+very legitimate use cases in which this makes using Signal unviable.
+
+## why not Pond?
+
+Pond is an asynchronous messaging system that aims to prevent information
+(content, message size, metadata, etc.) leaking to observers and attackers
+while providing similar security properties to Signal.
+
+- pond is deprecated in favor of Signal
+
+The last commit in the [official repository](https://github.com/agl/pond) dates
+back to 2016, and the author recommends using Signal instead.
+
+- identity and the spam issue
+
+Pond takes a fairly radical position on identity management.
+Quoting from the [website](https://web.archive.org/web/20150917091955/https://pond.imperialviolet.org/tech.html):
+
+> ... only authorised users can cause a message to be queued for delivery. This
+> very clearly sets Pond apart from email. There are no public addresses to
+> which a Pond message can be sent. Likewise, it's no longer true that the
+> network is fully connected; if you send a message to two people, they may not
+> be able to reply to each other.
+
+The document explains that this design decision was motivated in part to
+prevent spam. Mizu, on the other hand, sidesteps identity management by using
+Tezos addresses as identities, and the Proof-of-Work protocol involved in
+creating new Tezos addresses combined with the monetary cost of sending
+messages heavily discourages spam.
 
 ## issues to consider
 
@@ -152,6 +163,10 @@ TODO
     in Double Ratchet is not needed.
 - Discovery requests are currently very naive, should possibly be reworked to
   ease key agreement.
+- Does Mizu really minimize traffic leakage, and if so, to what extent?
+  - Operations on smart contracts require authentication of address, this
+    will most likely leak information (ex. Alice posting a Discovery message to
+    Bob show Alice paid for it, linking Bob and Alice together)
 
 ## TODOs
 
