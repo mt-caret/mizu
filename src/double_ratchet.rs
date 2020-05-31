@@ -128,6 +128,7 @@ impl DoubleRatchetClient {
         let nonce = GenericArray::from_slice(&message_key.1[0..12]);
 
         let cipher = Aes256Gcm::new(*key);
+        // CR pandaman: return an error instead of None for debuggability
         cipher.encrypt(&nonce, payload).ok()
     }
 
@@ -198,6 +199,7 @@ impl DoubleRatchetClient {
         let nonce = GenericArray::from_slice(&message_key.1[0..12]);
 
         let cipher = Aes256Gcm::new(*key);
+        // CR pandaman: return an error instead of None for debuggability
         cipher.decrypt(&nonce, payload).ok()
     }
 
@@ -207,6 +209,7 @@ impl DoubleRatchetClient {
         serialized_message: &[u8],
         associated_data: &X3DHAD,
     ) -> Option<Vec<u8>> {
+        // CR pandaman: return an error instead of None for debuggability
         let message: DoubleRatchetMessage = bincode::deserialize(serialized_message).ok()?;
         let associated_data =
             DoubleRatchetClient::build_associated_data(&associated_data, &message.header);

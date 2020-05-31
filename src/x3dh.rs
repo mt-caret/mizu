@@ -172,6 +172,7 @@ impl X3DHClient {
     ) -> Option<(X3DHSecretKey, Vec<u8>)> {
         // TODO: Is it safe to blindly trust identity_key provided in this
         // message, or does it open us to attacks?
+        // CR pandaman: return an error instead of None for debuggability
         let message: InitialMessage = bincode::deserialize(message).ok()?;
 
         let dh1 = *self.prekey.dh(&message.identity_key.0).as_bytes();
@@ -194,6 +195,7 @@ impl X3DHClient {
             aad: &associated_data.0,
         };
         let cipher = Aes256Gcm::new(*key);
+        // CR pandaman: return an error instead of None for debuggability
         let plaintext = cipher.decrypt(&nonce, payload).ok()?;
 
         Some((X3DHSecretKey(secret_key), plaintext))
