@@ -143,9 +143,17 @@ pub struct MessageKey(pub [u8; 32], pub [u8; 32]);
 
 impl ChainKey {
     fn hmac(key: &[u8], input: &[u8]) -> [u8; 32] {
-        // CR pandaman: probably it's worth documenting why each `unwrap()`
+        // XCR pandaman: probably it's worth documenting why each `unwrap()`
         // doesn't panic or is safe to panic considering the security of
         // the crypto module.
+        //
+        // mtakeda: fixed.
+
+        // The new_varkey method of the Mac trait returns an Option since
+        // it supports MACs which sometimes only can take keys with particular
+        // lengths, but the HMAC-SHA256 instance used here supports
+        // arbitrary-length keys, so is safe to unwrap()
+        // (see https://docs.rs/hmac/0.7.1/hmac/trait.Mac.html#provided-methods).
         let mut mac = Hmac::<Sha256>::new_varkey(key).unwrap();
         mac.input(input);
         mac.result().code().into()

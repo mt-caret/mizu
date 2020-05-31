@@ -106,9 +106,15 @@ impl DoubleRatchetClient {
         x3dh_ad: &X3DHAD,
         message_header: &DoubleRatchetMessageHeader,
     ) -> Vec<u8> {
-        // CR pandaman: document panic-freeness
+        // XCR pandaman: document panic-freeness
+        //
+        // mtakeda: done.
         [
             x3dh_ad.0.clone(),
+            // The only values that are serialized here (the fields of
+            // DoubleRatchetMessageHeader) are u64s and a RatchetPublicKey
+            // which is just an array of bytes, so it's probably safe to
+            // unwrap() this.
             bincode::serialize(&message_header).unwrap(),
         ]
         .concat()
@@ -118,7 +124,7 @@ impl DoubleRatchetClient {
         message_key: MessageKey,
         ciphertext: &[u8],
         associated_data: &[u8],
-    ) -> Option<Vec<u8>> {
+    ) -> Result<Vec<u8>, aes_gcm::aead::Error> {
         let payload = Payload {
             msg: &ciphertext,
             aad: &associated_data,
@@ -128,8 +134,10 @@ impl DoubleRatchetClient {
         let nonce = GenericArray::from_slice(&message_key.1[0..12]);
 
         let cipher = Aes256Gcm::new(*key);
-        // CR pandaman: return an error instead of None for debuggability
-        cipher.encrypt(&nonce, payload).ok()
+        // XCR pandaman: return an error instead of None for debuggability
+        //
+        // mtakeda: done.
+        cipher.encrypt(&nonce, payload)
     }
 
     pub fn encrypt_message(&mut self, plaintext: &[u8], associated_data: &X3DHAD) -> Vec<u8> {
@@ -189,7 +197,7 @@ impl DoubleRatchetClient {
         message_key: MessageKey,
         ciphertext: &[u8],
         associated_data: &[u8],
-    ) -> Option<Vec<u8>> {
+    ) -> Result<Vec<u8>, aes_gcm::aead::Error> {
         let payload = Payload {
             msg: &ciphertext,
             aad: &associated_data,
@@ -199,8 +207,11 @@ impl DoubleRatchetClient {
         let nonce = GenericArray::from_slice(&message_key.1[0..12]);
 
         let cipher = Aes256Gcm::new(*key);
-        // CR pandaman: return an error instead of None for debuggability
-        cipher.decrypt(&nonce, payload).ok()
+        // XCR pandaman: return an error instead of None for debuggability
+        //
+        // CR mtakeda: fixed here, but I've pushed down the ok() call to
+        // attempt_message_decryption. Let's address the problem over there.
+        cipher.decrypt(&nonce, payload)
     }
 
     pub fn attempt_message_decryption<R: CryptoRng + RngCore>(
@@ -222,11 +233,13 @@ impl DoubleRatchetClient {
             message.header.sent_count,
         );
         if let Some(message_key) = self.skipped_messages.get(&hashmap_key) {
+            // CR mtakeda: return an error instead of None for debuggability
             let plaintext = DoubleRatchetClient::decrypt(
                 message_key.clone(),
                 &message.ciphertext,
                 &associated_data,
-            )?;
+            )
+            .ok()?;
             assert!(self.skipped_messages.remove(&hashmap_key).is_some());
             return Some(plaintext);
         }
@@ -260,8 +273,10 @@ impl DoubleRatchetClient {
 
         new_state.skip_message_keys(message.header.sent_count)?;
         let message_key = new_state.receiving_chain_key.as_mut().unwrap().kdf();
+        // CR mtakeda: return an error instead of None for debuggability
         let plaintext =
-            DoubleRatchetClient::decrypt(message_key, &message.ciphertext, &associated_data)?;
+            DoubleRatchetClient::decrypt(message_key, &message.ciphertext, &associated_data)
+                .ok()?;
         new_state.received_count += 1;
 
         // Persist changes to the state only if decryption is successful.

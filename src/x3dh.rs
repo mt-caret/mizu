@@ -64,7 +64,14 @@ impl X3DHClient {
         let mut okm1 = [0u8; 32];
         let mut okm2 = [0u8; 32];
 
-        // CR pandaman: document panic-freeness
+        // XCR pandaman: document panic-freeness
+        //
+        // mtakeda: fixed.
+
+        // The underlying implementation of HKDF only returns Err when
+        // okm is larger than 255 times the size of prk
+        // (https://docs.rs/hkdf/0.8.0/src/hkdf/hkdf.rs.html#102-129).
+        // okm is much smaller, so it is safe to unwrap here.
         h.expand(INFO, &mut okm0).unwrap();
         h.expand(INFO, &mut okm1).unwrap();
         h.expand(INFO, &mut okm2).unwrap();
