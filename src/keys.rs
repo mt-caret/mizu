@@ -143,6 +143,9 @@ pub struct MessageKey(pub [u8; 32], pub [u8; 32]);
 
 impl ChainKey {
     fn hmac(key: &[u8], input: &[u8]) -> [u8; 32] {
+        // CR pandaman: probably it's worth documenting why each `unwrap()`
+        // doesn't panic or is safe to panic considering the security of
+        // the crypto module.
         let mut mac = Hmac::<Sha256>::new_varkey(key).unwrap();
         mac.input(input);
         mac.result().code().into()

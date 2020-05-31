@@ -64,6 +64,7 @@ impl X3DHClient {
         let mut okm1 = [0u8; 32];
         let mut okm2 = [0u8; 32];
 
+        // CR pandaman: document panic-freeness
         h.expand(INFO, &mut okm0).unwrap();
         h.expand(INFO, &mut okm1).unwrap();
         h.expand(INFO, &mut okm2).unwrap();

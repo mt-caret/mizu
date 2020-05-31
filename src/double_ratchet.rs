@@ -106,6 +106,7 @@ impl DoubleRatchetClient {
         x3dh_ad: &X3DHAD,
         message_header: &DoubleRatchetMessageHeader,
     ) -> Vec<u8> {
+        // CR pandaman: document panic-freeness
         [
             x3dh_ad.0.clone(),
             bincode::serialize(&message_header).unwrap(),
@@ -145,11 +146,13 @@ impl DoubleRatchetClient {
 
         let associated_data =
             DoubleRatchetClient::build_associated_data(associated_data, &message_header);
+        // CR pandaman: document panic-freeness
         let ciphertext =
             DoubleRatchetClient::encrypt(message_key, plaintext, &associated_data).unwrap();
 
         self.sent_count += 1;
 
+        // CR pandaman: document panic-freeness
         bincode::serialize(&DoubleRatchetMessage {
             header: message_header,
             ciphertext: ciphertext,
