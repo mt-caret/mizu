@@ -317,24 +317,35 @@ mod tests {
 
     #[derive(Debug, Clone)]
     enum Sender {
-        Alice,
-        Bob,
+        Alice(bool),
+        Bob(bool),
+    }
+
+    impl Sender {
+        fn is_delivered(&self) -> bool {
+            match self {
+                Sender::Alice(b) => *b,
+                Sender::Bob(b) => *b,
+            }
+        }
     }
 
     impl Arbitrary for Sender {
         fn arbitrary<G: Gen>(mut g: &mut G) -> Self {
-            [Sender::Alice, Sender::Bob]
-                .choose(&mut g)
-                .expect("choose value")
-                .clone()
+            [
+                Sender::Alice(bool::arbitrary(g)),
+                Sender::Bob(bool::arbitrary(g)),
+            ]
+            .choose(&mut g)
+            .expect("choose value")
+            .clone()
         }
     }
 
-    #[quickcheck]
-    fn double_ratchet_multiple_messages_works(
-        message_content: Vec<u8>,
-        sender_order: Vec<Sender>,
-    ) -> bool {
+    fn exchange_multiple_double_ratchet_messages(
+        message_content: &[u8],
+        sender_order: &[Sender],
+    ) -> Vec<Option<Vec<u8>>> {
         let mut csprng = OsRng;
         let (_alice_x3dh, bob_x3dh, secret_key, associated_data) = stub_x3dh();
 
@@ -355,26 +366,64 @@ mod tests {
 
         assert_eq!(decrypted_message, Some(empty_message));
 
-        let mut decrypted_messages = Vec::new();
+        let mut decrytion_results = Vec::new();
         for sender in sender_order.iter() {
             match sender {
-                Sender::Alice => {
+                Sender::Alice(delivered) => {
                     let message = alice.encrypt_message(&message_content, &associated_data);
-                    let decrypted_message =
-                        bob.attempt_message_decryption(&mut csprng, &message, &associated_data);
-                    decrypted_messages.push(decrypted_message);
+                    if *delivered {
+                        let decrypted_message =
+                            bob.attempt_message_decryption(&mut csprng, &message, &associated_data);
+                        decrytion_results.push(decrypted_message);
+                    } else {
+                        decrytion_results.push(None);
+                    }
                 }
-                Sender::Bob => {
+                Sender::Bob(delivered) => {
                     let message = bob.encrypt_message(&message_content, &associated_data);
-                    let decrypted_message =
-                        alice.attempt_message_decryption(&mut csprng, &message, &associated_data);
-                    decrypted_messages.push(decrypted_message);
+                    if *delivered {
+                        let decrypted_message = alice.attempt_message_decryption(
+                            &mut csprng,
+                            &message,
+                            &associated_data,
+                        );
+                        decrytion_results.push(decrypted_message);
+                    } else {
+                        decrytion_results.push(None);
+                    }
                 }
             }
         }
 
-        decrypted_messages
+        decrytion_results
+    }
+
+    #[quickcheck]
+    fn double_ratchet_multiple_messages_works(
+        message_content: Vec<u8>,
+        sender_order: Vec<Sender>,
+    ) -> bool {
+        let results = exchange_multiple_double_ratchet_messages(&message_content, &sender_order);
+        assert_eq!(results.len(), sender_order.len());
+        results
             .iter()
-            .all(|decrypted_message| decrypted_message.as_ref() == Some(&message_content))
+            .zip(sender_order)
+            .all(|(decrypted_message, sender)| {
+                if sender.is_delivered() {
+                    decrypted_message.as_ref() == Some(&message_content)
+                } else {
+                    decrypted_message == &None
+                }
+            })
+    }
+
+    #[test]
+    fn responder_drops_first_message() {
+        let message_content = Vec::new();
+        let decrypted_messages = exchange_multiple_double_ratchet_messages(
+            &message_content,
+            &[Sender::Bob(false), Sender::Bob(true)],
+        );
+        assert_eq!(decrypted_messages, [None, Some(message_content.clone())]);
     }
 }
