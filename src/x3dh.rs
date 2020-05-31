@@ -43,9 +43,9 @@ pub struct InitialMessage {
 pub struct X3DHAD(pub Vec<u8>);
 
 impl X3DHClient {
-    pub fn new<R: CryptoRng + RngCore>(mut csprng: &mut R) -> X3DHClient {
-        let identity_key = IdentityKeyPair::new(&mut csprng);
-        let prekey = PrekeyKeyPair::new(&mut csprng);
+    pub fn new<R: CryptoRng + RngCore>(csprng: &mut R) -> X3DHClient {
+        let identity_key = IdentityKeyPair::new(csprng);
+        let prekey = PrekeyKeyPair::new(csprng);
         X3DHClient {
             identity_key: identity_key,
             prekey: prekey,
@@ -72,7 +72,7 @@ impl X3DHClient {
 
     pub fn derive_initial_keys<R: CryptoRng + RngCore>(
         &self,
-        mut csprng: &mut R,
+        csprng: &mut R,
         ik: &IdentityPublicKey,
         pk: &PrekeyPublicKey,
     ) -> (X3DHSecretKey, EphemeralPublicKey) {
@@ -82,7 +82,7 @@ impl X3DHClient {
         // borrow the private key to prevent reuse. This API is adequate for
         // normal usage but since we reuse the same secret for dh2 and dh3,
         // we cannot use EphemeralSecret.
-        let ephemeral_private_key = StaticSecret::new(&mut csprng);
+        let ephemeral_private_key = StaticSecret::new(csprng);
         let ephemeral_public_key = PublicKey::from(&ephemeral_private_key);
 
         let dh1 = *self.identity_key.dh_pk(&pk).as_bytes();

@@ -16,8 +16,8 @@ pub struct IdentityKeyPair {
 }
 
 impl IdentityKeyPair {
-    pub fn new<R: CryptoRng + RngCore>(mut csprng: &mut R) -> IdentityKeyPair {
-        let private_key = StaticSecret::new(&mut csprng);
+    pub fn new<R: CryptoRng + RngCore>(csprng: &mut R) -> IdentityKeyPair {
+        let private_key = StaticSecret::new(csprng);
         let public_key = IdentityPublicKey(PublicKey::from(&private_key));
         IdentityKeyPair {
             private_key: private_key,
@@ -52,8 +52,8 @@ impl PrekeyPublicKey {
 }
 
 impl PrekeyKeyPair {
-    pub fn new<R: CryptoRng + RngCore>(mut csprng: &mut R) -> PrekeyKeyPair {
-        let private_key = StaticSecret::new(&mut csprng);
+    pub fn new<R: CryptoRng + RngCore>(csprng: &mut R) -> PrekeyKeyPair {
+        let private_key = StaticSecret::new(csprng);
         let public_key = PrekeyPublicKey(PublicKey::from(&private_key));
         PrekeyKeyPair {
             private_key: private_key,
@@ -103,8 +103,8 @@ pub struct RatchetKeyPair {
 }
 
 impl RatchetKeyPair {
-    pub fn new<R: CryptoRng + RngCore>(mut csprng: &mut R) -> RatchetKeyPair {
-        let private_key = StaticSecret::new(&mut csprng);
+    pub fn new<R: CryptoRng + RngCore>(csprng: &mut R) -> RatchetKeyPair {
+        let private_key = StaticSecret::new(csprng);
         let public_key = RatchetPublicKey(PublicKey::from(&private_key));
         RatchetKeyPair {
             private_key: private_key,

@@ -53,12 +53,12 @@ pub struct DoubleRatchetMessage {
 
 impl DoubleRatchetClient {
     pub fn initiate<R: CryptoRng + RngCore>(
-        mut csprng: &mut R,
+        csprng: &mut R,
         secret_key: X3DHSecretKey,
         recipient_prekey: &PrekeyPublicKey,
     ) -> DoubleRatchetClient {
         let receiving_ratchet_key = recipient_prekey.convert_to_ratchet_public_key();
-        let sending_ratchet_keypair = RatchetKeyPair::new(&mut csprng);
+        let sending_ratchet_keypair = RatchetKeyPair::new(csprng);
 
         // Here, we view the secret key derived from the X3DH key agreement
         // protocol as the intial root key.
@@ -200,7 +200,7 @@ impl DoubleRatchetClient {
 
     pub fn attempt_message_decryption<R: CryptoRng + RngCore>(
         &mut self,
-        mut csprng: &mut R,
+        csprng: &mut R,
         serialized_message: &[u8],
         associated_data: &X3DHAD,
     ) -> Option<Vec<u8>> {
@@ -242,7 +242,7 @@ impl DoubleRatchetClient {
                         .dh(&message.header.ratchet_public_key),
                 ),
             );
-            new_state.sending_ratchet_keypair = RatchetKeyPair::new(&mut csprng);
+            new_state.sending_ratchet_keypair = RatchetKeyPair::new(csprng);
             new_state.sending_chain_key = Some(
                 new_state.root_key.kdf(
                     new_state
