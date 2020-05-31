@@ -122,7 +122,7 @@ pub struct RootKey(pub [u8; 32]);
 static INFO_RK: &'static [u8; 19] = b"MizuProtocolRootKey";
 
 impl RootKey {
-    // update RootKey and return the next ChainKey
+    /// Updates RootKey and returns the next ChainKey.
     pub fn kdf(&mut self, shared_secret: SharedSecret) -> ChainKey {
         let h = Hkdf::<Sha256>::new(Some(&self.0), shared_secret.as_bytes());
         let mut rk = [0u8; 32];
@@ -148,7 +148,7 @@ impl ChainKey {
         mac.result().code().into()
     }
 
-    // update ChainKey and return the next MessageKey
+    /// Updates ChainKey and returns the next MessageKey.
     pub fn kdf(&mut self) -> MessageKey {
         let mk = ChainKey::hmac(&self.0, &[1]);
 
