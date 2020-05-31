@@ -162,3 +162,4 @@ TODO
   - [ ] [Olm: A Cryptographic Ratchet](https://gitlab.matrix.org/matrix-org/olm/-/blob/master/docs/olm.md)
 - [ ] document the differences between X3DH + Double Ratchet
 - [ ] add a way to remove pokes
+- [ ] possibly use constant-time primitives available here: https://github.com/dalek-cryptography/subtle
