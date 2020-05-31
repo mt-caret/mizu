@@ -3,7 +3,6 @@ use hmac::{Hmac, Mac};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use std::convert::TryInto;
 use x25519_dalek::*;
 
 // X3DH
@@ -146,7 +145,7 @@ impl ChainKey {
     fn hmac(key: &[u8], input: &[u8]) -> [u8; 32] {
         let mut mac = Hmac::<Sha256>::new_varkey(key).unwrap();
         mac.input(input);
-        mac.result().code().as_slice().try_into().unwrap()
+        mac.result().code().into()
     }
 
     // update ChainKey and return the next MessageKey
