@@ -119,7 +119,7 @@ impl RatchetKeyPair {
 #[derive(Clone)]
 pub struct RootKey(pub [u8; 32]);
 
-static INFO_RK: &'static [u8; 19] = b"MizuProtocolRootKey";
+static INFO_RK: &[u8; 19] = b"MizuProtocolRootKey";
 
 impl RootKey {
     /// Updates RootKey and returns the next ChainKey.

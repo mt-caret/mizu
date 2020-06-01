@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use x25519_dalek::*;
 
-static INFO: &'static [u8; 12] = b"MizuProtocol";
+static INFO: &[u8; 12] = b"MizuProtocol";
 
 pub struct X3DHClient {
     // We omit the one-time prekey here, since we trust the Tezos blockchain
@@ -156,7 +156,7 @@ impl X3DHClient {
         let message = InitialMessage {
             identity_key: self.identity_key.public_key.clone(),
             ephemeral_key: ephemeral_key.clone(),
-            ciphertext: ciphertext,
+            ciphertext,
         };
 
         // TODO: We use serde and bincode to serialize the message.

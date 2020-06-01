@@ -32,6 +32,14 @@ pub struct DoubleRatchetClient {
 // timing attacks).
 #[derive(PartialEq, Eq, Clone)]
 pub struct SkippedMessagesKey(RatchetPublicKey, u64);
+// Clippy is concerned about implementing Hash but deriving PartialEq as
+// k1 == k2 ⇒ hash(k1) == hash(k2) may not hold. However, since the
+// implementation of hash is simple enough that it's relatively easy to see
+// that the above property should always hold.
+//
+// TODO: implementing PartialEq over cryptographic primitives as constant-time
+// compares may obsolete this issue altogether.
+#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for SkippedMessagesKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
         (self.0).0.as_bytes().hash(state);
@@ -173,7 +181,7 @@ impl DoubleRatchetClient {
         // mtakeda: fixed.
         bincode::serialize(&DoubleRatchetMessage {
             header: message_header,
-            ciphertext: ciphertext,
+            ciphertext,
         })
         .map_err(|err| CryptoError::Serialization("DoubleRatchetMessage".to_string(), *err))
     }
