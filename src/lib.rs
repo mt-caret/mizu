@@ -27,14 +27,14 @@ use x3dh::{X3DHClient, X3DHMessage};
 //
 // TODO: Are the IdentityPublicKeys in all messages really necessary?
 #[derive(Serialize, Deserialize, Debug)]
-enum Message {
+pub enum Message {
     X3DH(X3DHMessage),
     Regular(IdentityPublicKey, DoubleRatchetMessage),
 }
 
 // TODO: What happens when each side creates and sends a X3DH message for the other?
 // TODO: there needs to be some way to persist this to disk
-struct Client {
+pub struct Client {
     x3dh: X3DHClient,
     double_ratchet: Option<DoubleRatchetClient>,
     our_info: Vec<u8>,
@@ -167,9 +167,32 @@ impl Client {
     }
 }
 
-//#[cfg(test)]
-//mod tests {
-//    #[quickcheck]
-//    fn x3dh_with_double_ratchet(message_content: Vec<u8>) -> bool {
-//    }
-//}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::rngs::OsRng;
+
+    #[quickcheck]
+    fn one_message_works(message_content: Vec<u8>) -> bool {
+        let mut csprng = OsRng;
+        let alice_info = b"alice";
+        let bob_info = b"bob";
+
+        let mut alice = Client::new(&mut csprng, alice_info, bob_info);
+        let mut bob = Client::new(&mut csprng, bob_info, alice_info);
+
+        let encrypted_message = alice
+            .create_x3dh_message(
+                &mut csprng,
+                &bob.x3dh.identity_key.public_key,
+                &bob.x3dh.prekey.public_key,
+                &message_content,
+            )
+            .expect("encryption should succeed");
+        let decrypted_message = bob
+            .attempt_message_decryption(&mut csprng, encrypted_message)
+            .expect("decryption should succeed");
+
+        message_content == decrypted_message
+    }
+}
