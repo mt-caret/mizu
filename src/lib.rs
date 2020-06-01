@@ -198,9 +198,6 @@ mod tests {
         message_content == decrypted_message
     }
 
-    // TODO: The below definition of Sender and impls are copied from
-    // src/double_ratchet.rs. I'm not aware of how to facilitate code
-    // reuse in test modules.
     #[derive(Debug, Clone)]
     enum Sender {
         Alice(bool, bool),
