@@ -65,10 +65,6 @@ impl X3DHClient {
         let mut okm1 = [0u8; 32];
         let mut okm2 = [0u8; 32];
 
-        // XCR pandaman: document panic-freeness
-        //
-        // mtakeda: fixed.
-
         // The underlying implementation of HKDF only returns Err when
         // okm is larger than 255 times the size of prk
         // (https://docs.rs/hkdf/0.8.0/src/hkdf/hkdf.rs.html#102-129).
@@ -180,9 +176,6 @@ impl X3DHClient {
     ) -> Result<(X3DHSecretKey, Vec<u8>), CryptoError> {
         // TODO: Is it safe to blindly trust identity_key provided in this
         // message, or does it open us to attacks?
-        // XCR pandaman: return an error instead of None for debuggability
-        //
-        // mtakeda: fixed.
         let message: InitialMessage = bincode::deserialize(message)
             .map_err(|err| CryptoError::Deserialization("InitialMessage".to_string(), *err))?;
 
@@ -206,9 +199,6 @@ impl X3DHClient {
             aad: &associated_data.0,
         };
         let cipher = Aes256Gcm::new(*key);
-        // XCR pandaman: return an error instead of None for debuggability
-        //
-        // mtakeda: fixed.
         let plaintext = cipher
             .decrypt(&nonce, payload)
             .map_err(|_| CryptoError::AEADDecryption("InitialMessage".to_string()))?;

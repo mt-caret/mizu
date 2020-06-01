@@ -115,9 +115,6 @@ impl DoubleRatchetClient {
         x3dh_ad: &X3DHAD,
         message_header: &DoubleRatchetMessageHeader,
     ) -> Vec<u8> {
-        // XCR pandaman: document panic-freeness
-        //
-        // mtakeda: done.
         [
             x3dh_ad.0.clone(),
             // The only values that are serialized here (i.e. the fields of
@@ -143,9 +140,6 @@ impl DoubleRatchetClient {
         let nonce = GenericArray::from_slice(&message_key.1[0..12]);
 
         let cipher = Aes256Gcm::new(*key);
-        // XCR pandaman: return an error instead of None for debuggability
-        //
-        // mtakeda: done.
         cipher.encrypt(&nonce, payload)
     }
 
@@ -168,17 +162,11 @@ impl DoubleRatchetClient {
 
         let associated_data =
             DoubleRatchetClient::build_associated_data(associated_data, &message_header);
-        // XCR pandaman: document panic-freeness
-        //
-        // mtakeda: fixed.
         let ciphertext = DoubleRatchetClient::encrypt(message_key, plaintext, &associated_data)
             .map_err(|_| CryptoError::AEADEncryption("DoubleRatchetMessage".to_string()))?;
 
         self.sent_count += 1;
 
-        // XCR pandaman: document panic-freeness
-        //
-        // mtakeda: fixed.
         bincode::serialize(&DoubleRatchetMessage {
             header: message_header,
             ciphertext,
@@ -224,10 +212,6 @@ impl DoubleRatchetClient {
         let nonce = GenericArray::from_slice(&message_key.1[0..12]);
 
         let cipher = Aes256Gcm::new(*key);
-        // XCR pandaman: return an error instead of None for debuggability
-        //
-        // mtakeda: fixed here, but I've pushed down the ok() call to
-        // attempt_message_decryption. Let's address the problem over there.
         cipher.decrypt(&nonce, payload)
     }
 
@@ -237,9 +221,6 @@ impl DoubleRatchetClient {
         serialized_message: &[u8],
         associated_data: &X3DHAD,
     ) -> Result<Vec<u8>, CryptoError> {
-        // XCR pandaman: return an error instead of None for debuggability
-        //
-        // mtakeda: fixed.
         let message: DoubleRatchetMessage =
             bincode::deserialize(serialized_message).map_err(|err| {
                 CryptoError::Deserialization("DoubleRatchetMessage".to_string(), *err)
