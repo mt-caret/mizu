@@ -22,7 +22,7 @@ pub struct X3DHClient {
 pub struct X3DHSecretKey(pub [u8; 32]);
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct InitialMessage {
+pub struct X3DHMessage {
     // TODO: identity_key seems redundant in our case since it's already
     // published in user_data of the sender, which should be known by the
     // recipient at this point. This could save the Mizu client the work of
@@ -36,7 +36,7 @@ pub struct InitialMessage {
     // should instead keep the two most recent prekeys along with when rotation
     // occured and use the appropriate prekey based on the timestamp of the
     // message.
-    identity_key: IdentityPublicKey,
+    pub identity_key: IdentityPublicKey,
     ephemeral_key: EphemeralPublicKey,
     ciphertext: Vec<u8>,
 }
@@ -129,7 +129,7 @@ impl X3DHClient {
         secret_key: &X3DHSecretKey,
         ephemeral_key: &EphemeralPublicKey,
         associated_data: X3DHAD,
-    ) -> Vec<u8> {
+    ) -> X3DHMessage {
         // TODO: I think running the secret through the kdf and using the
         // outputs this way is valid; should check libsignal sources and
         // mimic what they do.
@@ -149,36 +149,21 @@ impl X3DHClient {
         let cipher = Aes256Gcm::new(*key);
         let ciphertext = cipher.encrypt(&nonce, payload).unwrap();
 
-        let message = InitialMessage {
+        X3DHMessage {
             identity_key: self.identity_key.public_key.clone(),
             ephemeral_key: ephemeral_key.clone(),
             ciphertext,
-        };
-
-        // TODO: We use serde and bincode to serialize the message.
-        // This creates a potential issue: is it possible to differentiate
-        // between types of messages (i.e. does bincode leave some sort of
-        // marker so the type of serialized data can be identified)?
-        // If it is, then anybody can see which types of messages are being
-        // sent, which when combined with message size, can be considered to
-        // be a case of nontrivial metadata leakage.
-        //
-        // How bincode works seems pretty straightforward:
-        // http://tyoverby.com/posts/bincode_release.html
-        bincode::serialize(&message).unwrap()
+        }
     }
 
+    // TODO: Is it safe to blindly trust identity_key provided in this
+    // message, or does it open us to attacks?
     pub fn decrypt_initial_message(
         &self,
-        message: &[u8],
+        message: &X3DHMessage,
         sender_info: &[u8],
         receiver_info: &[u8],
     ) -> Result<(X3DHSecretKey, Vec<u8>), CryptoError> {
-        // TODO: Is it safe to blindly trust identity_key provided in this
-        // message, or does it open us to attacks?
-        let message: InitialMessage = bincode::deserialize(message)
-            .map_err(|err| CryptoError::Deserialization("InitialMessage".to_string(), *err))?;
-
         let dh1 = *self.prekey.dh(&message.identity_key.0).as_bytes();
         let dh2 = *self.identity_key.dh_ek(&message.ephemeral_key).as_bytes();
         let dh3 = *self.prekey.dh(&message.ephemeral_key.0).as_bytes();
@@ -252,6 +237,16 @@ mod tests {
         alice_sk.0 == bob_sk.0 && message_content == decrypted_message
     }
 
+    fn create_random_message<R: CryptoRng + RngCore>(csprng: &mut R, junk: Vec<u8>) -> X3DHMessage {
+        let identity_key = IdentityKeyPair::new(csprng).public_key;
+        let ephemeral_key = EphemeralPublicKey(PublicKey::from(&StaticSecret::new(csprng)));
+        X3DHMessage {
+            identity_key,
+            ephemeral_key,
+            ciphertext: junk,
+        }
+    }
+
     // Let's say Mallory sends Bob a bunch of junk. Can Bob gracefully handle
     // this?
     #[quickcheck]
@@ -262,6 +257,7 @@ mod tests {
         let sender_info = b"mallory";
         let receiver_info = b"bob";
 
+        let junk = create_random_message(&mut csprng, junk);
         bob.decrypt_initial_message(&junk, sender_info, receiver_info)
             .is_err()
     }

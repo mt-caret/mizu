@@ -12,4 +12,6 @@ pub enum CryptoError {
     Deserialization(String, bincode::ErrorKind),
     #[error("rejected message with too many skipped messages")]
     TooManySkippedMessages,
+    #[error("received a DoubleRatchetMessage with Double Ratchet uninitialized")]
+    UnreadableDoubleRatchetMessage,
 }

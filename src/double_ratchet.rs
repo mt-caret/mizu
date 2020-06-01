@@ -63,7 +63,7 @@ pub struct DoubleRatchetMessage {
 impl DoubleRatchetClient {
     pub fn initiate<R: CryptoRng + RngCore>(
         csprng: &mut R,
-        secret_key: X3DHSecretKey,
+        secret_key: &X3DHSecretKey,
         recipient_prekey: &PrekeyPublicKey,
     ) -> DoubleRatchetClient {
         let receiving_ratchet_key = recipient_prekey.convert_to_ratchet_public_key();
@@ -147,7 +147,7 @@ impl DoubleRatchetClient {
         &mut self,
         plaintext: &[u8],
         associated_data: &X3DHAD,
-    ) -> Result<Vec<u8>, CryptoError> {
+    ) -> Result<DoubleRatchetMessage, CryptoError> {
         let message_key = self
             .sending_chain_key
             .as_mut()
@@ -167,11 +167,20 @@ impl DoubleRatchetClient {
 
         self.sent_count += 1;
 
-        bincode::serialize(&DoubleRatchetMessage {
+        Ok(DoubleRatchetMessage {
             header: message_header,
             ciphertext,
         })
-        .map_err(|err| CryptoError::Serialization("DoubleRatchetMessage".to_string(), *err))
+    }
+
+    pub fn encrypt_message_and_serialize(
+        &mut self,
+        plaintext: &[u8],
+        associated_data: &X3DHAD,
+    ) -> Result<Vec<u8>, CryptoError> {
+        let message = self.encrypt_message(plaintext, associated_data)?;
+        bincode::serialize(&message)
+            .map_err(|err| CryptoError::Serialization("DoubleRatchetMessage".to_string(), *err))
     }
 
     fn skip_message_keys(&mut self, until: u64) -> Result<(), CryptoError> {
@@ -218,13 +227,9 @@ impl DoubleRatchetClient {
     pub fn attempt_message_decryption<R: CryptoRng + RngCore>(
         &mut self,
         csprng: &mut R,
-        serialized_message: &[u8],
+        message: &DoubleRatchetMessage,
         associated_data: &X3DHAD,
     ) -> Result<Vec<u8>, CryptoError> {
-        let message: DoubleRatchetMessage =
-            bincode::deserialize(serialized_message).map_err(|err| {
-                CryptoError::Deserialization("DoubleRatchetMessage".to_string(), *err)
-            })?;
         let associated_data =
             DoubleRatchetClient::build_associated_data(&associated_data, &message.header);
 
@@ -328,7 +333,7 @@ mod tests {
 
         let mut alice = DoubleRatchetClient::initiate(
             &mut csprng,
-            copy_x3dh_secret_key(&secret_key),
+            &copy_x3dh_secret_key(&secret_key),
             &bob_x3dh.prekey.public_key,
         );
         let message = alice
@@ -341,18 +346,6 @@ mod tests {
             .expect("decryption should succeed");
 
         decrypted_message == message_content
-    }
-
-    // Let's say Mallory sends Bob a bunch of junk. Can Bob gracefully handle
-    // this?
-    #[quickcheck]
-    fn double_ratchet_handles_failures_gracefully(junk: Vec<u8>) -> bool {
-        let mut csprng = OsRng;
-        let (_alice_x3dh, bob_x3dh, secret_key, associated_data) = stub_x3dh();
-
-        let mut bob = DoubleRatchetClient::respond(secret_key, &bob_x3dh.prekey);
-        bob.attempt_message_decryption(&mut csprng, &junk, &associated_data)
-            .is_err()
     }
 
     #[derive(Debug, Clone)]
@@ -395,7 +388,7 @@ mod tests {
 
         let mut alice = DoubleRatchetClient::initiate(
             &mut csprng,
-            copy_x3dh_secret_key(&secret_key),
+            &copy_x3dh_secret_key(&secret_key),
             &bob_x3dh.prekey.public_key,
         );
         let message = alice
