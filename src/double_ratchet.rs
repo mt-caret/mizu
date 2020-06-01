@@ -343,6 +343,18 @@ mod tests {
         decrypted_message == message_content
     }
 
+    // Let's say Mallory sends Bob a bunch of junk. Can Bob gracefully handle
+    // this?
+    #[quickcheck]
+    fn double_ratchet_handles_failures_gracefully(junk: Vec<u8>) -> bool {
+        let mut csprng = OsRng;
+        let (_alice_x3dh, bob_x3dh, secret_key, associated_data) = stub_x3dh();
+
+        let mut bob = DoubleRatchetClient::respond(secret_key, &bob_x3dh.prekey);
+        bob.attempt_message_decryption(&mut csprng, &junk, &associated_data)
+            .is_err()
+    }
+
     #[derive(Debug, Clone)]
     enum Sender {
         Alice(bool),

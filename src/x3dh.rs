@@ -255,14 +255,14 @@ mod tests {
     // Let's say Mallory sends Bob a bunch of junk. Can Bob gracefully handle
     // this?
     #[quickcheck]
-    fn x3dh_handles_failure_gracefully(junk_message: Vec<u8>) -> bool {
+    fn x3dh_handles_failures_gracefully(junk: Vec<u8>) -> bool {
         let mut csprng = OsRng;
         let bob = X3DHClient::new(&mut csprng);
 
         let sender_info = b"mallory";
         let receiver_info = b"bob";
 
-        bob.decrypt_initial_message(&junk_message, sender_info, receiver_info)
+        bob.decrypt_initial_message(&junk, sender_info, receiver_info)
             .is_err()
     }
 }
