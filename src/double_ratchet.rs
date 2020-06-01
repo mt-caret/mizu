@@ -402,6 +402,8 @@ mod tests {
 
         assert_eq!(decrypted_message, empty_message);
 
+        // TODO: it might be better here to add some numbering information to
+        // the messages to make sure decryption of old messages isn't happening.
         let mut decrytion_results = Vec::new();
         for sender in sender_order.iter() {
             match sender {

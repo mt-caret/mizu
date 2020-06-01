@@ -170,6 +170,8 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quickcheck::{Arbitrary, Gen};
+    use rand::prelude::SliceRandom;
     use rand::rngs::OsRng;
 
     #[quickcheck]
@@ -194,5 +196,157 @@ mod tests {
             .expect("decryption should succeed");
 
         message_content == decrypted_message
+    }
+
+    // TODO: The below definition of Sender and impls are copied from
+    // src/double_ratchet.rs. I'm not aware of how to facilitate code
+    // reuse in test modules.
+    #[derive(Debug, Clone)]
+    enum Sender {
+        Alice(bool, bool),
+        Bob(bool, bool),
+    }
+
+    impl Sender {
+        fn is_delivered(&self) -> bool {
+            match self {
+                Sender::Alice(b, _) => *b,
+                Sender::Bob(b, _) => *b,
+            }
+        }
+    }
+
+    impl Arbitrary for Sender {
+        fn arbitrary<G: Gen>(mut g: &mut G) -> Self {
+            [
+                Sender::Alice(bool::arbitrary(g), bool::arbitrary(g)),
+                Sender::Bob(bool::arbitrary(g), bool::arbitrary(g)),
+            ]
+            .choose(&mut g)
+            .expect("choose value")
+            .clone()
+        }
+    }
+
+    fn exchange_multiple_messages(
+        message_content: &[u8],
+        sender_order: &[Sender],
+    ) -> Vec<Option<Vec<u8>>> {
+        // We use an empty message here, since the first message is already
+        // covered by the one_message_works quickcheck test.
+        let empty_message = Vec::new();
+
+        let mut csprng = OsRng;
+        let alice_info = b"alice";
+        let bob_info = b"bob";
+
+        let mut alice = Client::new(&mut csprng, alice_info, bob_info);
+        let mut bob = Client::new(&mut csprng, bob_info, alice_info);
+
+        let encrypted_message = alice
+            .create_x3dh_message(
+                &mut csprng,
+                &bob.x3dh.identity_key.public_key,
+                &bob.x3dh.prekey.public_key,
+                &empty_message,
+            )
+            .expect("encryption should succeed");
+        let decrypted_message = bob
+            .attempt_message_decryption(&mut csprng, encrypted_message)
+            .expect("decryption should succeed");
+
+        assert_eq!(empty_message, decrypted_message);
+
+        let mut decrytion_results = Vec::new();
+        for sender in sender_order.iter() {
+            match sender {
+                Sender::Alice(delivered, send_x3dh) => {
+                    let encrypted_message = (if *send_x3dh {
+                        alice.create_x3dh_message(
+                            &mut csprng,
+                            &bob.x3dh.identity_key.public_key,
+                            &bob.x3dh.prekey.public_key,
+                            &message_content,
+                        )
+                    } else {
+                        alice.create_regular_message(
+                            &bob.x3dh.identity_key.public_key,
+                            &message_content,
+                        )
+                    })
+                    .expect("encryption should succeed");
+
+                    if *delivered {
+                        let decrypted_message =
+                            bob.attempt_message_decryption(&mut csprng, encrypted_message);
+                        decrytion_results.push(decrypted_message.ok());
+                    } else {
+                        decrytion_results.push(None);
+                    }
+                }
+                Sender::Bob(delivered, send_x3dh) => {
+                    let encrypted_message = (if *send_x3dh {
+                        bob.create_x3dh_message(
+                            &mut csprng,
+                            &alice.x3dh.identity_key.public_key,
+                            &alice.x3dh.prekey.public_key,
+                            &message_content,
+                        )
+                    } else {
+                        bob.create_regular_message(
+                            &alice.x3dh.identity_key.public_key,
+                            &message_content,
+                        )
+                    })
+                    .expect("encryption should succeed");
+
+                    if *delivered {
+                        let decrypted_message =
+                            alice.attempt_message_decryption(&mut csprng, encrypted_message);
+                        decrytion_results.push(decrypted_message.ok());
+                    } else {
+                        decrytion_results.push(None);
+                    }
+                }
+            }
+        }
+
+        decrytion_results
+    }
+
+    #[quickcheck]
+    fn multiple_messages_works(message_content: Vec<u8>, sender_order: Vec<Sender>) -> bool {
+        let results = exchange_multiple_messages(&message_content, &sender_order);
+        assert_eq!(results.len(), sender_order.len());
+        results
+            .iter()
+            .zip(sender_order)
+            .all(|(decrypted_message, sender)| {
+                if sender.is_delivered() {
+                    decrypted_message.as_ref() == Some(&message_content)
+                } else {
+                    decrypted_message == &None
+                }
+            })
+    }
+
+    #[test]
+    fn test_case_1() {
+        let message_content = Vec::new();
+        let decrypted_messages = exchange_multiple_messages(
+            &message_content,
+            &[Sender::Alice(false, true), Sender::Bob(true, false)],
+        );
+        assert_eq!(decrypted_messages, [None, Some(message_content.clone())]);
+    }
+
+    #[test]
+    fn test_case_2() {
+        let message_content = Vec::new();
+        let decrypted_messages = exchange_multiple_messages(
+            &message_content,
+            &[Sender::Bob(false, true), Sender::Bob(true, false)],
+        );
+        assert_eq!(decrypted_messages, [None, Some(message_content.clone())]);
     }
 }
