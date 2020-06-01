@@ -3,7 +3,6 @@ use hmac::{Hmac, Mac};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use std::convert::TryInto;
 use x25519_dalek::*;
 
 // X3DH
@@ -16,12 +15,12 @@ pub struct IdentityKeyPair {
 }
 
 impl IdentityKeyPair {
-    pub fn new<R: CryptoRng + RngCore>(mut csprng: &mut R) -> IdentityKeyPair {
-        let private_key = StaticSecret::new(&mut csprng);
+    pub fn new<R: CryptoRng + RngCore>(csprng: &mut R) -> IdentityKeyPair {
+        let private_key = StaticSecret::new(csprng);
         let public_key = IdentityPublicKey(PublicKey::from(&private_key));
         IdentityKeyPair {
-            private_key: private_key,
-            public_key: public_key,
+            private_key,
+            public_key,
         }
     }
 
@@ -52,12 +51,12 @@ impl PrekeyPublicKey {
 }
 
 impl PrekeyKeyPair {
-    pub fn new<R: CryptoRng + RngCore>(mut csprng: &mut R) -> PrekeyKeyPair {
-        let private_key = StaticSecret::new(&mut csprng);
+    pub fn new<R: CryptoRng + RngCore>(csprng: &mut R) -> PrekeyKeyPair {
+        let private_key = StaticSecret::new(csprng);
         let public_key = PrekeyPublicKey(PublicKey::from(&private_key));
         PrekeyKeyPair {
-            private_key: private_key,
-            public_key: public_key,
+            private_key,
+            public_key,
         }
     }
 
@@ -103,12 +102,12 @@ pub struct RatchetKeyPair {
 }
 
 impl RatchetKeyPair {
-    pub fn new<R: CryptoRng + RngCore>(mut csprng: &mut R) -> RatchetKeyPair {
-        let private_key = StaticSecret::new(&mut csprng);
+    pub fn new<R: CryptoRng + RngCore>(csprng: &mut R) -> RatchetKeyPair {
+        let private_key = StaticSecret::new(csprng);
         let public_key = RatchetPublicKey(PublicKey::from(&private_key));
         RatchetKeyPair {
-            private_key: private_key,
-            public_key: public_key,
+            private_key,
+            public_key,
         }
     }
 
@@ -120,10 +119,10 @@ impl RatchetKeyPair {
 #[derive(Clone)]
 pub struct RootKey(pub [u8; 32]);
 
-static INFO_RK: &'static [u8; 19] = b"MizuProtocolRootKey";
+static INFO_RK: &[u8; 19] = b"MizuProtocolRootKey";
 
 impl RootKey {
-    // update RootKey and return the next ChainKey
+    /// Updates RootKey and returns the next ChainKey.
     pub fn kdf(&mut self, shared_secret: SharedSecret) -> ChainKey {
         let h = Hkdf::<Sha256>::new(Some(&self.0), shared_secret.as_bytes());
         let mut rk = [0u8; 32];
@@ -144,12 +143,17 @@ pub struct MessageKey(pub [u8; 32], pub [u8; 32]);
 
 impl ChainKey {
     fn hmac(key: &[u8], input: &[u8]) -> [u8; 32] {
+        // The new_varkey method of the Mac trait returns an Option since
+        // it supports MACs which sometimes only can take keys with particular
+        // lengths, but the HMAC-SHA256 instance used here supports
+        // arbitrary-length keys, so is safe to unwrap()
+        // (see https://docs.rs/hmac/0.7.1/hmac/trait.Mac.html#provided-methods).
         let mut mac = Hmac::<Sha256>::new_varkey(key).unwrap();
         mac.input(input);
-        mac.result().code().as_slice().try_into().unwrap()
+        mac.result().code().into()
     }
 
-    // update ChainKey and return the next MessageKey
+    /// Updates ChainKey and returns the next MessageKey.
     pub fn kdf(&mut self) -> MessageKey {
         let mk = ChainKey::hmac(&self.0, &[1]);
 

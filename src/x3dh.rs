@@ -1,3 +1,4 @@
+use crate::error::CryptoError;
 use crate::keys::{
     EphemeralPublicKey, IdentityKeyPair, IdentityPublicKey, PrekeyKeyPair, PrekeyPublicKey,
 };
@@ -9,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use x25519_dalek::*;
 
-static INFO: &'static [u8; 12] = b"MizuProtocol";
+static INFO: &[u8; 12] = b"MizuProtocol";
 
 pub struct X3DHClient {
     // We omit the one-time prekey here, since we trust the Tezos blockchain
@@ -43,12 +44,12 @@ pub struct InitialMessage {
 pub struct X3DHAD(pub Vec<u8>);
 
 impl X3DHClient {
-    pub fn new<R: CryptoRng + RngCore>(mut csprng: &mut R) -> X3DHClient {
-        let identity_key = IdentityKeyPair::new(&mut csprng);
-        let prekey = PrekeyKeyPair::new(&mut csprng);
+    pub fn new<R: CryptoRng + RngCore>(csprng: &mut R) -> X3DHClient {
+        let identity_key = IdentityKeyPair::new(csprng);
+        let prekey = PrekeyKeyPair::new(csprng);
         X3DHClient {
-            identity_key: identity_key,
-            prekey: prekey,
+            identity_key,
+            prekey,
         }
 
         // TODO: publish keys to smart contract?
@@ -64,6 +65,10 @@ impl X3DHClient {
         let mut okm1 = [0u8; 32];
         let mut okm2 = [0u8; 32];
 
+        // The underlying implementation of HKDF only returns Err when
+        // okm is larger than 255 times the size of prk
+        // (https://docs.rs/hkdf/0.8.0/src/hkdf/hkdf.rs.html#102-129).
+        // okm is much smaller, so it is safe to unwrap here.
         h.expand(INFO, &mut okm0).unwrap();
         h.expand(INFO, &mut okm1).unwrap();
         h.expand(INFO, &mut okm2).unwrap();
@@ -72,7 +77,7 @@ impl X3DHClient {
 
     pub fn derive_initial_keys<R: CryptoRng + RngCore>(
         &self,
-        mut csprng: &mut R,
+        csprng: &mut R,
         ik: &IdentityPublicKey,
         pk: &PrekeyPublicKey,
     ) -> (X3DHSecretKey, EphemeralPublicKey) {
@@ -82,7 +87,7 @@ impl X3DHClient {
         // borrow the private key to prevent reuse. This API is adequate for
         // normal usage but since we reuse the same secret for dh2 and dh3,
         // we cannot use EphemeralSecret.
-        let ephemeral_private_key = StaticSecret::new(&mut csprng);
+        let ephemeral_private_key = StaticSecret::new(csprng);
         let ephemeral_public_key = PublicKey::from(&ephemeral_private_key);
 
         let dh1 = *self.identity_key.dh_pk(&pk).as_bytes();
@@ -125,7 +130,7 @@ impl X3DHClient {
         ephemeral_key: &EphemeralPublicKey,
         associated_data: X3DHAD,
     ) -> Vec<u8> {
-        // TODO: I think runnin the secret through the kdf and using the
+        // TODO: I think running the secret through the kdf and using the
         // outputs this way is valid; should check libsignal sources and
         // mimic what they do.
         let [key, _, nonce_base] = X3DHClient::kdf(&secret_key.0);
@@ -147,7 +152,7 @@ impl X3DHClient {
         let message = InitialMessage {
             identity_key: self.identity_key.public_key.clone(),
             ephemeral_key: ephemeral_key.clone(),
-            ciphertext: ciphertext,
+            ciphertext,
         };
 
         // TODO: We use serde and bincode to serialize the message.
@@ -168,10 +173,11 @@ impl X3DHClient {
         message: &[u8],
         sender_info: &[u8],
         receiver_info: &[u8],
-    ) -> Option<(X3DHSecretKey, Vec<u8>)> {
+    ) -> Result<(X3DHSecretKey, Vec<u8>), CryptoError> {
         // TODO: Is it safe to blindly trust identity_key provided in this
         // message, or does it open us to attacks?
-        let message: InitialMessage = bincode::deserialize(message).ok()?;
+        let message: InitialMessage = bincode::deserialize(message)
+            .map_err(|err| CryptoError::Deserialization("InitialMessage".to_string(), *err))?;
 
         let dh1 = *self.prekey.dh(&message.identity_key.0).as_bytes();
         let dh2 = *self.identity_key.dh_ek(&message.ephemeral_key).as_bytes();
@@ -193,9 +199,11 @@ impl X3DHClient {
             aad: &associated_data.0,
         };
         let cipher = Aes256Gcm::new(*key);
-        let plaintext = cipher.decrypt(&nonce, payload).ok()?;
+        let plaintext = cipher
+            .decrypt(&nonce, payload)
+            .map_err(|_| CryptoError::AEADDecryption("InitialMessage".to_string()))?;
 
-        Some((X3DHSecretKey(secret_key), plaintext))
+        Ok((X3DHSecretKey(secret_key), plaintext))
     }
 }
 
@@ -255,6 +263,6 @@ mod tests {
         let receiver_info = b"bob";
 
         bob.decrypt_initial_message(&junk_message, sender_info, receiver_info)
-            .is_none()
+            .is_err()
     }
 }
