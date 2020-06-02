@@ -47,6 +47,19 @@ Identities are Tezos public keys / addresses, and both the postal box and
 discovery requests are maintained by a Tezos smart contract, thus are
 globally replicated across all Tezos nodes.
 
+## interfacing with Tezos
+
+Mizu interfaces with the Tezos blockchain by connecting to a Tezos node over
+the network. This, however, leaks a substantial amount of information about
+the user as the node will be able to correlate the IP address with
+identities as well as find out the identities in the contact list of the user.
+
+This can probably be significantly alleviated by having a pool of Tezos nodes
+which are randomly selected and contacted over Tor. However, care must be
+taken so each read and write are sufficiently distributed accross space
+([originate from differing Tor exit nodes](https://tails.boum.org/contribute/design/stream_isolation/))
+and time to make correlation difficult.
+
 ## potential attacks
 
 ### spam
@@ -64,43 +77,6 @@ If an adversary mounts a successfull (albeit extremely costly) attack against
 the Tezos blockchain, it will be possible to remove blocks which will
 constitute a Denial of Service attack on Mizu. However, messages in Mizu
 will still be impossible to forge or replay, and stay confidential.
-
-## modes of operation
-
-Mizu has two modes of operation with respect to where the Tezos node is located:
-
-- self-contained mode: In this mode, the Tezos node is operated on the same
-  machine as Mizu.
-- delegated mode: In this node, Mizu connects to (possibly multiple) Tezos
-  nodes over the network to interface with the Tezos blockchain.
-
-The advantage of the self-contained mode is minimal metadata leakage.
-If Mizu reads the user data of a some address, this will tell the
-node the following information: either the Mizu instance is the address
-(if Mizu is trying to check the list of discovery messages) or the address is
-in the list of contacts (in which case Mizu is checking for new messages).
-Note, however posting to the user's postal box will result in the
-corresponding block being propagated among Tezos nodes originating with the
-Tezos node used by Mizu.
-
-TODO: This could possibly be alleviated to a significant extent, by having a
-pool of nodes to post to over Tor. But then it's probably much easier to just
-use delegated mode.
-
-The drawback of this mode is the substantial storage and uptime requirements of
-running a Tezos node. Users generally will not expect and should not have to
-devote tens or possibly hundereds of gigabytes of storage and be constantly
-online (or bear the prohibitive synchronization costs the first time around,
-and subsequently for not being online) in order to run a messaging application.
-
-Delegated mode does not have this issue, since reads and writes are done by
-nodes hosted by others. This, however, leaks a substantial amount of metadata
-leakage as outlined above. This can probably be improved to a significant
-extent by having a pool of Tezos nodes which are randomly selected and
-contacted over Tor. However, care must be taken so each read and write
-are sufficiently distributed accross space (originate from differing Tor exit
-nodes) and time to make correlation difficult.
-
 ## why not [Signal](https://signal.org/)?
 
 Signal is a messaging application for smartphones which provides
