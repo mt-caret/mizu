@@ -51,8 +51,8 @@ impl Client {
         Client {
             x3dh: X3DHClient::new(csprng),
             double_ratchet: None,
-            our_info: our_info.iter().cloned().collect(),
-            their_info: their_info.iter().cloned().collect(),
+            our_info: our_info.to_vec(),
+            their_info: their_info.to_vec(),
             unacknowledged_x3dh: None,
         }
     }
