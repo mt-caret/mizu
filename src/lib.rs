@@ -9,10 +9,10 @@ pub mod x3dh;
 
 use double_ratchet::{DoubleRatchetClient, DoubleRatchetMessage};
 use error::CryptoError;
-use keys::{IdentityPublicKey, PrekeyPublicKey};
+use keys::{EphemeralPublicKey, IdentityPublicKey, PrekeyPublicKey};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use x3dh::{X3DHClient, X3DHMessage};
+use x3dh::{X3DHClient, X3DHMessage, X3DHSecretKey};
 
 // TODO: We use serde and bincode to serialize messages.
 // This creates a potential issue: is it possible to differentiate
@@ -39,7 +39,11 @@ pub struct Client {
     double_ratchet: Option<DoubleRatchetClient>,
     our_info: Vec<u8>,
     their_info: Vec<u8>,
+    unacknowledged_x3dh: Option<(X3DHSecretKey, EphemeralPublicKey)>,
 }
+
+// first_message -> must send x3dh
+// have I received a response after sending a x3dh -> must send x3dh
 
 impl Client {
     pub fn new<R: CryptoRng + RngCore>(
@@ -52,63 +56,72 @@ impl Client {
             double_ratchet: None,
             our_info: our_info.iter().cloned().collect(),
             their_info: their_info.iter().cloned().collect(),
+            unacknowledged_x3dh: None,
         }
     }
 
-    pub fn create_x3dh_message<R: CryptoRng + RngCore>(
+    pub fn create_message<R: CryptoRng + RngCore>(
         &mut self,
         csprng: &mut R,
         recipient_identity_key: &IdentityPublicKey,
         recipient_prekey: &PrekeyPublicKey,
         message_content: &[u8],
     ) -> Result<Message, CryptoError> {
-        let (secret_key, ephemeral_public_key) =
-            self.x3dh
-                .derive_initial_keys(csprng, recipient_identity_key, recipient_prekey);
         let ad = X3DHClient::build_associated_data(
             &self.x3dh.identity_key.public_key,
             &recipient_identity_key,
             &self.our_info,
             &self.their_info,
         );
+        match (
+            self.double_ratchet.as_mut(),
+            self.unacknowledged_x3dh.clone(),
+        ) {
+            (None, None) => {
+                let (secret_key, ephemeral_public_key) =
+                    self.x3dh
+                        .derive_initial_keys(csprng, recipient_identity_key, recipient_prekey);
+                let mut double_ratchet =
+                    DoubleRatchetClient::initiate(csprng, &secret_key, recipient_prekey);
+                let serialized_message =
+                    double_ratchet.encrypt_message_and_serialize(message_content, &ad)?;
+                let x3dh_message = self.x3dh.construct_initial_message(
+                    &serialized_message,
+                    &secret_key,
+                    &ephemeral_public_key,
+                    ad,
+                );
 
-        let mut double_ratchet =
-            DoubleRatchetClient::initiate(csprng, &secret_key, recipient_prekey);
-        let serialized_message =
-            double_ratchet.encrypt_message_and_serialize(message_content, &ad)?;
-        let x3dh_message = self.x3dh.construct_initial_message(
-            &serialized_message,
-            &secret_key,
-            &ephemeral_public_key,
-            ad,
-        );
+                self.double_ratchet = Some(double_ratchet);
+                self.unacknowledged_x3dh = Some((secret_key, ephemeral_public_key));
+                Ok(Message::X3DH(x3dh_message))
+            }
+            (None, Some(_)) => {
+                unreachable!("Missing DoubleRatchetClient with unacknowledged X3DH message");
+            }
+            (Some(double_ratchet), None) => {
+                let double_ratchet_message =
+                    double_ratchet.encrypt_message(message_content, &ad)?;
 
-        self.double_ratchet = Some(double_ratchet);
-        Ok(Message::X3DH(x3dh_message))
-    }
+                Ok(Message::Regular(
+                    self.x3dh.identity_key.public_key.clone(),
+                    double_ratchet_message,
+                ))
+            }
+            (Some(double_ratchet), Some((secret_key, ephemeral_public_key))) => {
+                let serialized_message =
+                    double_ratchet.encrypt_message_and_serialize(message_content, &ad)?;
+                let x3dh_message = self.x3dh.construct_initial_message(
+                    &serialized_message,
+                    &secret_key,
+                    &ephemeral_public_key,
+                    ad,
+                );
 
-    pub fn create_regular_message(
-        &mut self,
-        recipient_identity_key: &IdentityPublicKey,
-        message_content: &[u8],
-    ) -> Result<Message, CryptoError> {
-        let ad = X3DHClient::build_associated_data(
-            &self.x3dh.identity_key.public_key,
-            &recipient_identity_key,
-            &self.our_info,
-            &self.their_info,
-        );
-
-        let double_ratchet_message = self
-            .double_ratchet
-            .as_mut()
-            .expect("DoubleRatchetClient should already have been initialized at this point")
-            .encrypt_message(message_content, &ad)?;
-
-        Ok(Message::Regular(
-            self.x3dh.identity_key.public_key.clone(),
-            double_ratchet_message,
-        ))
+                self.unacknowledged_x3dh = Some((secret_key, ephemeral_public_key));
+                Ok(Message::X3DH(x3dh_message))
+            }
+        }
     }
 
     pub fn attempt_message_decryption<R: CryptoRng + RngCore>(
@@ -151,6 +164,7 @@ impl Client {
                 )?;
 
                 self.double_ratchet = Some(double_ratchet);
+                self.unacknowledged_x3dh = None;
 
                 Ok(content)
             }
@@ -161,7 +175,10 @@ impl Client {
                     &self.their_info,
                     &self.our_info,
                 );
-                double_ratchet.attempt_message_decryption(csprng, &encrypted_message, &ad)
+                let content =
+                    double_ratchet.attempt_message_decryption(csprng, &encrypted_message, &ad)?;
+                self.unacknowledged_x3dh = None;
+                Ok(content)
             }
         }
     }
@@ -184,7 +201,7 @@ mod tests {
         let mut bob = Client::new(&mut csprng, bob_info, alice_info);
 
         let encrypted_message = alice
-            .create_x3dh_message(
+            .create_message(
                 &mut csprng,
                 &bob.x3dh.identity_key.public_key,
                 &bob.x3dh.prekey.public_key,
@@ -200,15 +217,15 @@ mod tests {
 
     #[derive(Debug, Clone)]
     enum Sender {
-        Alice(bool, bool),
-        Bob(bool, bool),
+        Alice(bool),
+        Bob(bool),
     }
 
     impl Sender {
         fn is_delivered(&self) -> bool {
             match self {
-                Sender::Alice(b, _) => *b,
-                Sender::Bob(b, _) => *b,
+                Sender::Alice(b) => *b,
+                Sender::Bob(b) => *b,
             }
         }
     }
@@ -216,8 +233,8 @@ mod tests {
     impl Arbitrary for Sender {
         fn arbitrary<G: Gen>(mut g: &mut G) -> Self {
             [
-                Sender::Alice(bool::arbitrary(g), bool::arbitrary(g)),
-                Sender::Bob(bool::arbitrary(g), bool::arbitrary(g)),
+                Sender::Alice(bool::arbitrary(g)),
+                Sender::Bob(bool::arbitrary(g)),
             ]
             .choose(&mut g)
             .expect("choose value")
@@ -241,7 +258,7 @@ mod tests {
         let mut bob = Client::new(&mut csprng, bob_info, alice_info);
 
         let encrypted_message = alice
-            .create_x3dh_message(
+            .create_message(
                 &mut csprng,
                 &bob.x3dh.identity_key.public_key,
                 &bob.x3dh.prekey.public_key,
@@ -257,21 +274,15 @@ mod tests {
         let mut decrytion_results = Vec::new();
         for sender in sender_order.iter() {
             match sender {
-                Sender::Alice(delivered, send_x3dh) => {
-                    let encrypted_message = (if *send_x3dh {
-                        alice.create_x3dh_message(
+                Sender::Alice(delivered) => {
+                    let encrypted_message = alice
+                        .create_message(
                             &mut csprng,
                             &bob.x3dh.identity_key.public_key,
                             &bob.x3dh.prekey.public_key,
                             &message_content,
                         )
-                    } else {
-                        alice.create_regular_message(
-                            &bob.x3dh.identity_key.public_key,
-                            &message_content,
-                        )
-                    })
-                    .expect("encryption should succeed");
+                        .expect("encryption should succeed");
 
                     if *delivered {
                         let decrypted_message =
@@ -281,21 +292,15 @@ mod tests {
                         decrytion_results.push(None);
                     }
                 }
-                Sender::Bob(delivered, send_x3dh) => {
-                    let encrypted_message = (if *send_x3dh {
-                        bob.create_x3dh_message(
+                Sender::Bob(delivered) => {
+                    let encrypted_message = bob
+                        .create_message(
                             &mut csprng,
                             &alice.x3dh.identity_key.public_key,
                             &alice.x3dh.prekey.public_key,
                             &message_content,
                         )
-                    } else {
-                        bob.create_regular_message(
-                            &alice.x3dh.identity_key.public_key,
-                            &message_content,
-                        )
-                    })
-                    .expect("encryption should succeed");
+                        .expect("encryption should succeed");
 
                     if *delivered {
                         let decrypted_message =
@@ -332,7 +337,7 @@ mod tests {
         let message_content = Vec::new();
         let decrypted_messages = exchange_multiple_messages(
             &message_content,
-            &[Sender::Alice(false, true), Sender::Bob(true, false)],
+            &[Sender::Alice(false), Sender::Bob(true)],
         );
         assert_eq!(decrypted_messages, [None, Some(message_content.clone())]);
     }
@@ -340,10 +345,8 @@ mod tests {
     #[test]
     fn test_case_2() {
         let message_content = Vec::new();
-        let decrypted_messages = exchange_multiple_messages(
-            &message_content,
-            &[Sender::Bob(false, true), Sender::Bob(true, false)],
-        );
+        let decrypted_messages =
+            exchange_multiple_messages(&message_content, &[Sender::Bob(false), Sender::Bob(true)]);
         assert_eq!(decrypted_messages, [None, Some(message_content.clone())]);
     }
 }

@@ -19,6 +19,7 @@ pub struct X3DHClient {
     pub prekey: PrekeyKeyPair,
 }
 
+#[derive(Clone)]
 pub struct X3DHSecretKey(pub [u8; 32]);
 
 #[derive(Serialize, Deserialize, Debug)]
