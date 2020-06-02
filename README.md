@@ -6,14 +6,16 @@
 
 Mizu is an experiment to explore what secure, private, and asynchronous
 messaging might look on the blockchain.
-Mizu is similar to email combined with PGP, while being forward secure and
-tries to minimize information leakage, similar to
+Mizu is similar to email combined with PGP, while being forward secret and
+tries to reduce information leakage, similar to
 [Pond](https://web.archive.org/web/20151101081526/https://pond.imperialviolet.org/).
 
 **DISCLAIMER**: The design and implementation of Mizu is done by
 non-cryptographers who have not had substantial experience designing or
 implementing security-critical communication protocols. Please do not use
 this for anything real.
+
+- [threat model](./threat_model.md)
 
 ## how does Mizu work?
 
