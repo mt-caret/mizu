@@ -74,4 +74,6 @@ The threat model is heavily modeled on Pond's:
 TODO: notably, deniability does not exist since messages are signed with
 private keys and are stored for eternity on the Tezos blockchain, thus are
 trivially reproducible.
+
+[Relevant Phrack article](https://web.archive.org/web/20120505220122/http://phrack.org/issues.html?issue=68&id=14)
 -->
