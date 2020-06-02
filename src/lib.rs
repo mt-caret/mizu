@@ -196,10 +196,30 @@ impl Client {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+pub mod common {
     use quickcheck::{Arbitrary, Gen};
     use rand::prelude::SliceRandom;
+
+    #[derive(Debug, Clone)]
+    pub enum Sender {
+        Alice,
+        Bob,
+    }
+
+    impl Arbitrary for Sender {
+        fn arbitrary<G: Gen>(mut g: &mut G) -> Self {
+            [Sender::Alice, Sender::Bob]
+                .choose(&mut g)
+                .expect("choose value")
+                .clone()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::Sender;
     use rand::rngs::OsRng;
 
     #[quickcheck]
@@ -226,36 +246,9 @@ mod tests {
         message_content == decrypted_message
     }
 
-    #[derive(Debug, Clone)]
-    enum Sender {
-        Alice(bool),
-        Bob(bool),
-    }
-
-    impl Sender {
-        fn is_delivered(&self) -> bool {
-            match self {
-                Sender::Alice(b) => *b,
-                Sender::Bob(b) => *b,
-            }
-        }
-    }
-
-    impl Arbitrary for Sender {
-        fn arbitrary<G: Gen>(mut g: &mut G) -> Self {
-            [
-                Sender::Alice(bool::arbitrary(g)),
-                Sender::Bob(bool::arbitrary(g)),
-            ]
-            .choose(&mut g)
-            .expect("choose value")
-            .clone()
-        }
-    }
-
     fn exchange_multiple_messages(
         message_content: &[u8],
-        sender_order: &[Sender],
+        sender_order: &[(Sender, bool)],
     ) -> Vec<Option<Vec<u8>>> {
         // We use an empty message here, since the first message is already
         // covered by the one_message_works quickcheck test.
@@ -283,9 +276,9 @@ mod tests {
         assert_eq!(empty_message, decrypted_message);
 
         let mut decrytion_results = Vec::new();
-        for sender in sender_order.iter() {
+        for (sender, delivered) in sender_order.iter() {
             match sender {
-                Sender::Alice(delivered) => {
+                Sender::Alice => {
                     let encrypted_message = alice
                         .create_message(
                             &mut csprng,
@@ -303,7 +296,7 @@ mod tests {
                         decrytion_results.push(None);
                     }
                 }
-                Sender::Bob(delivered) => {
+                Sender::Bob => {
                     let encrypted_message = bob
                         .create_message(
                             &mut csprng,
@@ -328,14 +321,17 @@ mod tests {
     }
 
     #[quickcheck]
-    fn multiple_messages_works(message_content: Vec<u8>, sender_order: Vec<Sender>) -> bool {
+    fn multiple_messages_works(
+        message_content: Vec<u8>,
+        sender_order: Vec<(Sender, bool)>,
+    ) -> bool {
         let results = exchange_multiple_messages(&message_content, &sender_order);
         assert_eq!(results.len(), sender_order.len());
         results
             .iter()
             .zip(sender_order)
-            .all(|(decrypted_message, sender)| {
-                if sender.is_delivered() {
+            .all(|(decrypted_message, (_, delivered))| {
+                if delivered {
                     decrypted_message.as_ref() == Some(&message_content)
                 } else {
                     decrypted_message == &None
@@ -348,7 +344,7 @@ mod tests {
         let message_content = Vec::new();
         let decrypted_messages = exchange_multiple_messages(
             &message_content,
-            &[Sender::Alice(false), Sender::Bob(true)],
+            &[(Sender::Alice, false), (Sender::Bob, true)],
         );
         assert_eq!(decrypted_messages, [None, Some(message_content.clone())]);
     }
@@ -356,8 +352,10 @@ mod tests {
     #[test]
     fn test_case_2() {
         let message_content = Vec::new();
-        let decrypted_messages =
-            exchange_multiple_messages(&message_content, &[Sender::Bob(false), Sender::Bob(true)]);
+        let decrypted_messages = exchange_multiple_messages(
+            &message_content,
+            &[(Sender::Bob, false), (Sender::Bob, true)],
+        );
         assert_eq!(decrypted_messages, [None, Some(message_content.clone())]);
     }
 }
