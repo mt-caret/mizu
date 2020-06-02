@@ -22,6 +22,14 @@ pub struct DoubleRatchetClient {
     sent_count: u64,
     received_count: u64,
     previous_sending_chain_count: u64,
+    // TODO: Note that for Mizu, it's hard to imagine circumstances where
+    // there are a large number of skipped messages, since the only conceivable
+    // out-of-order / lost message scenario is when both communicating parties
+    // send messages at or close to the same time. If we persist skipped
+    // messages for indefinite amounts of time, this may result in a
+    // "space leak". I'm curious as to what Signal does in this case.
+    // Possibly some sort of higher-level protocol to forget or request
+    // lost messages?
     skipped_messages: HashMap<SkippedMessagesKey, MessageKey>,
 }
 

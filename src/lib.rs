@@ -42,9 +42,6 @@ pub struct Client {
     unacknowledged_x3dh: Option<(X3DHSecretKey, EphemeralPublicKey)>,
 }
 
-// first_message -> must send x3dh
-// have I received a response after sending a x3dh -> must send x3dh
-
 impl Client {
     pub fn new<R: CryptoRng + RngCore>(
         csprng: &mut R,
@@ -77,6 +74,11 @@ impl Client {
             self.double_ratchet.as_mut(),
             self.unacknowledged_x3dh.clone(),
         ) {
+            // If we don't have a DoubleRatchetClient, then we initiate X3DH
+            // and set up DoubleRatchetClient. In case that this message is
+            // lost, we continue to wrap all subsequent DoubleRatchetMessages
+            // with the same X3DHMessage until we receive a response, at which
+            // point it's safe to just send DoubleRatchetMessages on their own.
             (None, None) => {
                 let (secret_key, ephemeral_public_key) =
                     self.x3dh
@@ -96,9 +98,14 @@ impl Client {
                 self.unacknowledged_x3dh = Some((secret_key, ephemeral_public_key));
                 Ok(Message::X3DH(x3dh_message))
             }
+            // Since we only set the X3DH keys when we set up
+            // DoubleRatchetClient, this branch should never be taken.
             (None, Some(_)) => {
                 unreachable!("Missing DoubleRatchetClient with unacknowledged X3DH message");
             }
+            // This is the most uninteresting branch, where the X3DHMessage
+            // has been acknowledged and we're just sending
+            // DoubleRatchetMessages.
             (Some(double_ratchet), None) => {
                 let double_ratchet_message =
                     double_ratchet.encrypt_message(message_content, &ad)?;
@@ -108,6 +115,10 @@ impl Client {
                     double_ratchet_message,
                 ))
             }
+            // This branch is the case in which we haven't received a response
+            // so we continue to wrap DoubleRatchetMessages in X3DHMessages.
+            // Note we *don't* run self.x3dh.derive_initial_keys because the
+            // Double Ratchet protocol handles lost messages just fine.
             (Some(double_ratchet), Some((secret_key, ephemeral_public_key))) => {
                 let serialized_message =
                     double_ratchet.encrypt_message_and_serialize(message_content, &ad)?;
