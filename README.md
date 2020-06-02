@@ -10,6 +10,11 @@ Mizu is similar to email combined with PGP, while being forward secure and
 tries to minimize information leakage, similar to
 [Pond](https://web.archive.org/web/20151101081526/https://pond.imperialviolet.org/).
 
+**DISCLAIMER**: The design and implementation of Mizu is done by
+non-cryptographers who have not had substantial experience designing or
+implementing security-critical communication protocols. Please do not use
+this for anything real.
+
 ## how does Mizu work?
 
 Mizu initiates sessions between users with a protocol based on
