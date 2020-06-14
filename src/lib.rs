@@ -135,6 +135,10 @@ impl Client {
         }
     }
 
+    // Attempting to decrypt a valid X3DH message will reset the
+    // DoubleRatchetClient, so attempting to decrypt the same message multiple
+    // times has the risk of making later messages undecipherable!
+    // TODO: is it possible to prevent this at this layer in a nice way?
     pub fn attempt_message_decryption<R: CryptoRng + RngCore>(
         &mut self,
         csprng: &mut R,
