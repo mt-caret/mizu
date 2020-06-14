@@ -12,7 +12,7 @@ use std::hash::{Hash, Hasher};
 
 static MAX_SKIP: u64 = 32;
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct DoubleRatchetClient {
     sending_ratchet_keypair: RatchetKeyPair,
     receiving_ratchet_key: Option<RatchetPublicKey>,
@@ -38,7 +38,7 @@ pub struct DoubleRatchetClient {
 // implemented as a constant-time comparison, we purposefully do it here
 // instead of on RatchetPublicKey to prevent potential misuse (resulting in
 // timing attacks).
-#[derive(PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct SkippedMessagesKey(RatchetPublicKey, u64);
 // Clippy is concerned about implementing Hash but deriving PartialEq as
 // k1 == k2 ⇒ hash(k1) == hash(k2) may not hold. However, since the

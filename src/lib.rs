@@ -34,6 +34,7 @@ pub enum Message {
 
 // TODO: What happens when each side creates and sends a X3DH message for the other?
 // TODO: there needs to be some way to persist this to disk
+#[derive(Serialize, Deserialize)]
 pub struct Client {
     x3dh: X3DHClient,
     double_ratchet: Option<DoubleRatchetClient>,

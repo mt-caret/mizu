@@ -12,6 +12,7 @@ use x25519_dalek::*;
 
 static INFO: &[u8; 12] = b"MizuProtocol";
 
+#[derive(Serialize, Deserialize)]
 pub struct X3DHClient {
     // We omit the one-time prekey here, since we trust the Tezos blockchain
     // to not "replay" messages.
@@ -19,7 +20,7 @@ pub struct X3DHClient {
     pub prekey: PrekeyKeyPair,
 }
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct X3DHSecretKey(pub [u8; 32]);
 
 #[derive(Serialize, Deserialize, Debug)]

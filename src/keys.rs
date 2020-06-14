@@ -9,6 +9,7 @@ use x25519_dalek::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct IdentityPublicKey(pub PublicKey);
+#[derive(Serialize, Deserialize)]
 pub struct IdentityKeyPair {
     private_key: StaticSecret,
     pub public_key: IdentityPublicKey,
@@ -35,6 +36,7 @@ impl IdentityKeyPair {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PrekeyPublicKey(pub PublicKey);
+#[derive(Serialize, Deserialize)]
 pub struct PrekeyKeyPair {
     // While the prekey keypair has a shorter lifespan than that of the
     // identity keypair, its lifespan is still is on the order of days or
@@ -94,7 +96,7 @@ impl PartialEq for RatchetPublicKey {
 }
 impl Eq for RatchetPublicKey {}
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RatchetKeyPair {
     // Similar situation as PrekeyKeyPair's StaticSecret.
     private_key: StaticSecret,
@@ -116,7 +118,7 @@ impl RatchetKeyPair {
     }
 }
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RootKey(pub [u8; 32]);
 
 static INFO_RK: &[u8; 19] = b"MizuProtocolRootKey";
@@ -135,10 +137,10 @@ impl RootKey {
     }
 }
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChainKey([u8; 32]);
 // Key material for the nonce used in AEAD is bundled along with message key
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MessageKey(pub [u8; 32], pub [u8; 32]);
 
 impl ChainKey {
