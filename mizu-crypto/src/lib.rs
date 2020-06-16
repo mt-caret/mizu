@@ -58,6 +58,16 @@ impl Client {
         }
     }
 
+    pub fn with_x3dh_client(x3dh_client: X3DHClient, our_info: &[u8], their_info: &[u8]) -> Client {
+        Client {
+            x3dh: x3dh_client,
+            double_ratchet: None,
+            our_info: our_info.to_vec(),
+            their_info: their_info.to_vec(),
+            unacknowledged_x3dh: None,
+        }
+    }
+
     pub fn create_message<R: CryptoRng + RngCore>(
         &mut self,
         csprng: &mut R,
