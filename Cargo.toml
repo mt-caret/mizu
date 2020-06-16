@@ -2,4 +2,5 @@
 
 members = [
     "mizu-crypto",
+    "mizu-sqlite",
 ]
