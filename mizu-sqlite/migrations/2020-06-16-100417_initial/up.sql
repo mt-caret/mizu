@@ -5,6 +5,9 @@ CREATE TABLE contacts(
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Mizu suppports multiple identities, each corresponding to a Tezos addresses
+-- keypair. Each Mizu identity has an associated identity keypair and a
+-- prekey keypair (via mizu_crypto::x3dh::X3DHClient).
 CREATE TABLE identities(
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     name TEXT NOT NULL,
@@ -12,6 +15,7 @@ CREATE TABLE identities(
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Mizu keeps a mizu_crypto::Client for each (account, contact) pair.
 CREATE TABLE clients(
     identity_id INTEGER NOT NULL,
     contact_id INTEGER NOT NULL,
