@@ -5,9 +5,9 @@ use diesel::prelude::*;
 use mizu_crypto::x3dh::X3DHClient;
 use mizu_crypto::Client;
 
-pub mod identity;
 pub mod client;
 pub mod contact;
+pub mod identity;
 pub mod message;
 
 mod schema;
