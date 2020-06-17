@@ -1,3 +1,5 @@
+//! TODO: handle errors properly
+
 #[macro_use]
 extern crate diesel;
 
