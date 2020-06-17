@@ -1,5 +1,5 @@
 [package]
-name = "mizu"
+name = "mizu-crypto"
 version = "0.0.1"
 authors = ["mt-caret <mtakeda.enigsol@gmail.com>"]
 edition = "2018"
