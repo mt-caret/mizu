@@ -21,7 +21,7 @@ CREATE TABLE clients(
     contact_id INTEGER NOT NULL,
     client_data BLOB NOT NULL, -- mizu_crypto::Client in bincode
     PRIMARY KEY(identity_id, contact_id),
-    FOREIGN KEY(identity_id) REFERENCES identity_id(id),
+    FOREIGN KEY(identity_id) REFERENCES identities(id),
     FOREIGN KEY(contact_id) REFERENCES contacts(id)
 );
 
@@ -31,6 +31,6 @@ CREATE TABLE messages(
     contact_id INTEGER NOT NULL,
     content BLOB NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(identity_id) REFERENCES identity_id(id),
+    FOREIGN KEY(identity_id) REFERENCES identities(id),
     FOREIGN KEY(contact_id) REFERENCES contacts(id)
 );
