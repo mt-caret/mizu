@@ -1,11 +1,15 @@
 //! TODO: error handling
-//! TODO: implementation
 
 #[macro_use]
 extern crate diesel;
 
 use diesel::prelude::*;
 use tezos_interface::*;
+
+mod message;
+mod poke;
+mod schema;
+mod user;
 
 pub struct TezosMock {
     conn: SqliteConnection,
@@ -21,18 +25,117 @@ impl TezosMock {
 
 impl Tezos for TezosMock {
     fn retrieve_user_data(&self, address: &[u8]) -> UserData {
-        todo!()
+        // According to https://docs.diesel.rs/diesel/associations/index.html,
+        // selecting three tables is better than joining them.
+        // TODO: run queries within a transaction?
+        use schema::messages::dsl as messages_dsl;
+        use schema::pokes::dsl as pokes_dsl;
+        use schema::users::dsl as users_dsl;
+
+        let user = users_dsl::users
+            .filter(users_dsl::address.eq(address))
+            .first::<user::User>(&self.conn)
+            .unwrap();
+        let messages = message::Message::belonging_to(&user)
+            .order(messages_dsl::id.asc())
+            .load::<message::Message>(&self.conn)
+            .unwrap();
+        let pokes = poke::Poke::belonging_to(&user)
+            .order(pokes_dsl::id.asc())
+            .load::<poke::Poke>(&self.conn)
+            .unwrap();
+
+        UserData {
+            identity_key: user.identity_key,
+            prekey: user.prekey,
+            postal_box: messages
+                .into_iter()
+                .map(|m| Message {
+                    content: m.content,
+                    timestamp: m.timestamp,
+                })
+                .collect(),
+            pokes: pokes.into_iter().map(|p| p.content).collect(),
+        }
     }
 
     fn post(&self, sender_address: &[u8], add: &[&[u8]], remove: &[&usize]) {
-        todo!()
+        use schema::messages::dsl as messages_dsl;
+        use schema::users::dsl as users_dsl;
+
+        // TODO: transaction?
+        // First, retrieve all our posts to determine ones to be removed.
+        let user = users_dsl::users
+            .filter(users_dsl::address.eq(sender_address))
+            .first::<user::User>(&self.conn)
+            .unwrap();
+        let messages = message::Message::belonging_to(&user)
+            .order(messages_dsl::id.asc())
+            .load::<message::Message>(&self.conn)
+            .unwrap();
+        // TODO: return an error if the index is out of bounds (panics now).
+        let remove: Vec<i32> = remove.iter().map(|i| messages[**i].id).collect();
+
+        // Next, remove the corresponding messages.
+        diesel::delete(messages_dsl::messages.filter(messages_dsl::id.eq_any(&remove)))
+            .execute(&self.conn)
+            .unwrap();
+
+        // Finally, add messages.
+        let new_messages: Vec<_> = add
+            .iter()
+            .map(|content| message::NewMessage {
+                user_id: user.id,
+                content,
+            })
+            .collect();
+        diesel::insert_into(schema::messages::table)
+            .values(&new_messages)
+            .execute(&self.conn)
+            .unwrap();
     }
 
     fn poke(&self, target_address: &[u8], data: &[u8]) {
-        todo!()
+        // TODO: transaction?
+        use schema::users::dsl;
+        let user_id = dsl::users
+            .filter(dsl::address.eq(target_address))
+            .select(dsl::id)
+            .first::<i32>(&self.conn)
+            .unwrap();
+
+        diesel::insert_into(schema::pokes::table)
+            .values(&poke::NewPoke {
+                user_id,
+                content: data,
+            })
+            .execute(&self.conn)
+            .unwrap();
     }
 
-    fn register(&self, sender_address: &[u8], identity_key: &[u8], prekey: &[u8]) {
-        todo!()
+    fn register(&self, sender_address: &[u8], identity_key: Option<&[u8]>, prekey: &[u8]) {
+        use schema::users::dsl;
+
+        match identity_key {
+            // CR pandaman: Is it okay to fail silently if no matching row exist?
+            // We can check if the number of affected rows equals to zero or one.
+            None => diesel::update(dsl::users.filter(dsl::address.eq(sender_address)))
+                .set(dsl::prekey.eq(prekey))
+                .execute(&self.conn)
+                .unwrap(),
+            Some(identity_key) => {
+                // As our schema declares address column to be unique, this query
+                // - updates identity_key and prekey if the address already exists; or
+                // - inserts a new row with the given keys if the address does not exist.
+                diesel::replace_into(dsl::users)
+                    .values(&user::NewUser {
+                        address: sender_address,
+                        identity_key,
+                        prekey,
+                    })
+                    .execute(&self.conn)
+                    .unwrap()
+            }
+        };
     }
 }
