@@ -8,8 +8,8 @@ use url::Url;
 enum TezosError {
     #[error("failed to parse url: {0}")]
     UrlParse(url::ParseError),
-    #[error("io error: {0}")]
-    IO(io::Error),
+    #[error("deserialization error: {0}")]
+    Deserialize(io::Error),
 }
 
 #[derive(Deserialize, Debug)]
@@ -21,10 +21,11 @@ struct Bootstrapped {
 fn bootstrapped(host: &Url) -> Result<Bootstrapped, TezosError> {
     let url = host
         .join("monitor/bootstrapped")
-        .map_err(|e| TezosError::UrlParse(e))?;
+        .map_err(TezosError::UrlParse)?;
 
     let resp = ureq::get(url.as_str()).call();
-    resp.into_json_deserialize().map_err(|e| TezosError::IO(e))
+    resp.into_json_deserialize()
+        .map_err(TezosError::Deserialize)
 }
 
 #[derive(Deserialize, Debug)]
@@ -79,10 +80,11 @@ struct Constants {
 fn constants(host: &Url) -> Result<Constants, TezosError> {
     let url = host
         .join("chains/main/blocks/head/context/constants")
-        .map_err(|e| TezosError::UrlParse(e))?;
+        .map_err(TezosError::UrlParse)?;
 
     let resp = ureq::get(url.as_str()).call();
-    resp.into_json_deserialize().map_err(|e| TezosError::IO(e))
+    resp.into_json_deserialize()
+        .map_err(TezosError::Deserialize)
 }
 
 fn main() -> Result<(), TezosError> {
