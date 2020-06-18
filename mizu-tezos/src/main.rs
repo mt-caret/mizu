@@ -1,3 +1,5 @@
+mod helper;
+
 use num_bigint::{BigInt, BigUint};
 use serde::Deserialize;
 use std::io;
@@ -40,7 +42,7 @@ struct Constants {
     blocks_per_commitment: i32,
     blocks_per_roll_snapshot: i32,
     blocks_per_voting_period: i32,
-    #[serde(with = "serde_with::rust::seq_display_fromstr")]
+    #[serde(with = "helper::seq_display_fromstr")]
     time_between_blocks: Vec<i64>,
     endorsers_per_block: u16,
     #[serde(with = "serde_with::rust::display_fromstr")]
@@ -59,9 +61,9 @@ struct Constants {
     block_security_deposit: BigUint,
     #[serde(with = "serde_with::rust::display_fromstr")]
     endorsement_security_deposit: BigUint,
-    #[serde(with = "serde_with::rust::seq_display_fromstr")]
+    #[serde(with = "helper::seq_display_fromstr")]
     baking_reward_per_endorsement: Vec<BigUint>,
-    #[serde(with = "serde_with::rust::seq_display_fromstr")]
+    #[serde(with = "helper::seq_display_fromstr")]
     endorsement_reward: Vec<BigUint>,
     #[serde(with = "serde_with::rust::display_fromstr")]
     cost_per_byte: BigUint,
