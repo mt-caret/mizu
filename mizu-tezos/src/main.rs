@@ -89,7 +89,7 @@ fn constants(host: &Url) -> Result<Constants, TezosError> {
 
 fn main() -> Result<(), TezosError> {
     let node_host: Url =
-        Url::parse("https://carthagenet.smartpy.io").map_err(|e| TezosError::UrlParse(e))?;
+        Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
 
     let bootstrapped = bootstrapped(&node_host)?;
 
