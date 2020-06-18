@@ -1,7 +1,8 @@
 mod helper;
 
 use num_bigint::{BigInt, BigUint};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::io;
 use thiserror::Error;
 use url::Url;
@@ -25,8 +26,9 @@ fn bootstrapped(host: &Url) -> Result<Bootstrapped, TezosError> {
         .join("monitor/bootstrapped")
         .map_err(TezosError::UrlParse)?;
 
-    let resp = ureq::get(url.as_str()).call();
-    resp.into_json_deserialize()
+    ureq::get(url.as_str())
+        .call()
+        .into_json_deserialize()
         .map_err(TezosError::Deserialize)
 }
 
@@ -84,14 +86,190 @@ fn constants(host: &Url) -> Result<Constants, TezosError> {
         .join("chains/main/blocks/head/context/constants")
         .map_err(TezosError::UrlParse)?;
 
-    let resp = ureq::get(url.as_str()).call();
-    resp.into_json_deserialize()
+    ureq::get(url.as_str())
+        .call()
+        .into_json_deserialize()
+        .map_err(TezosError::Deserialize)
+}
+
+fn head_hash(host: &Url) -> Result<String, TezosError> {
+    let url = host
+        .join("chains/main/blocks/head/hash")
+        .map_err(TezosError::UrlParse)?;
+
+    ureq::get(url.as_str())
+        .call()
+        .into_json_deserialize()
+        .map_err(TezosError::Deserialize)
+}
+
+fn chain_id(host: &Url) -> Result<String, TezosError> {
+    let url = host
+        .join("chains/main/chain_id")
+        .map_err(TezosError::UrlParse)?;
+
+    ureq::get(url.as_str())
+        .call()
+        .into_json_deserialize()
+        .map_err(TezosError::Deserialize)
+}
+
+fn counter(host: &Url, contract_id: &str) -> Result<BigInt, TezosError> {
+    let url = host
+        .join(
+            &[
+                "chains/main/blocks/head/context/contracts/",
+                contract_id,
+                "/counter",
+            ]
+            .concat(),
+        )
+        .map_err(TezosError::UrlParse)?;
+
+    ureq::get(url.as_str())
+        .call()
+        .into_json_deserialize()
+        .map_err(TezosError::Deserialize)
+}
+
+//#[derive(Serialize, Deserialize, Debug)]
+//struct MichelsonExpr {
+//    prim: String,
+//    args: Vec<MichelsonExpr>,
+//}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct MichelsonPrim {
+    prim: String,
+    args: Vec<MichelsonExpr>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+enum MichelsonExpr {
+    Int(BigInt),
+    String(String),
+    Bytes(Vec<u8>),
+    List(Vec<MichelsonExpr>),
+    Prim(MichelsonPrim),
+}
+
+fn build_contract_operation(
+    branch: &str,
+    source: &str,
+    counter: &BigInt,
+    gas_limit: &BigInt,
+    storage_limit: &BigInt,
+    destination: &str,
+    arguments: &MichelsonExpr,
+) -> Value {
+    serde_json::json!(
+        { "branch": branch
+        , "contents":
+            [
+                { "kind": "transaction"
+                , "source": source
+                , "counter": counter
+                , "gas_limit": gas_limit
+                , "storage_limit": storage_limit
+                , "amount": 0
+                , "destination": destination
+                , "parameters":
+                    { "entrypoint": "default"
+                    , "value": arguments
+                    }
+                }
+            ]
+        }
+    )
+}
+
+fn serialize_operation(host: &Url, op: Value) -> Result<String, TezosError> {
+    let url = host
+        .join("chains/main/chain_id")
+        .map_err(TezosError::UrlParse)?;
+
+    ureq::post(url.as_str())
+        .send_json(op)
+        .into_json_deserialize()
+        .map_err(TezosError::Deserialize)
+}
+
+fn dry_run_contract(
+    host: &Url,
+    chain_id: &str,
+    branch: &str,
+    signature: &str,
+    source: &str,
+    counter: &BigInt,
+    gas_limit: &BigInt,
+    storage_limit: &BigInt,
+    destination: &str,
+    arguments: &MichelsonExpr,
+) -> Result<Value, TezosError> {
+    let url = host
+        .join("chains/main/chain_id")
+        .map_err(TezosError::UrlParse)?;
+
+    let payload = serde_json::json!(
+        { "operation":
+            { "branch": branch
+            , "contents":
+                [
+                    { "kind": "transaction"
+                    , "source": source
+                    , "counter": counter
+                    , "gas_limit": gas_limit
+                    , "storage_limit": storage_limit
+                    , "amount": 0
+                    , "destination": destination
+                    , "parameters":
+                      { "entrypoint": "default"
+                      , "value": arguments
+                    }
+                    }
+                ]
+            , "signature": signature
+            }
+        , "chain_id": chain_id
+        }
+    );
+
+    ureq::post(url.as_str())
+        .send_json(payload)
+        .into_json_deserialize()
         .map_err(TezosError::Deserialize)
 }
 
 fn main() -> Result<(), TezosError> {
     let node_host: Url =
         Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
+    let source = ""; // TODO: fill
+    let contract_id = "tz1cPQbVEBSygG5dwbqsaPCMpU4ZdyTzjy97";
+    let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
+    //let arguments =
+    //    MichelsonExpr {
+    //        prim: "Right",
+    //        args: vec![
+    //            MichelsonExpr {
+    //                prim: "Right",
+    //                args: vec![
+    //                    MichelsonExpr {
+    //                        prim: "Pair",
+    //                        args: vec![
+    //                            MichelsonExpr {
+    //                                prim: "Some",
+    //                                args: vec![ ]
+    //                            },
+    //                            MichelsonExpr {
+    //                            }
+    //                        ]
+    //                    }
+    //                ]
+    //            }
+    //        ],
+    //    }
+
+    let counter = counter(&node_host, &contract_id)?;
 
     let bootstrapped = bootstrapped(&node_host)?;
 
@@ -100,6 +278,21 @@ fn main() -> Result<(), TezosError> {
     let constants = constants(&node_host)?;
 
     println!("constants: {:?}", constants);
+
+    let branch = head_hash(&node_host)?;
+
+    println!("head hash: {}", branch);
+
+    let chain_id = chain_id(&node_host)?;
+
+    println!("chain_id: {}", chain_id);
+
+    //let op = build_contract_operation(branch, &source, &counter, &constants.hard_gas_limit_per_operation, &constants.hard_storage_limit_per_operation, &destination
+
+    //println!(
+    //    "dry_run_result: {}",
+    //    dry_run_contract(&node_host, &chain_id, &branch)?
+    //);
 
     Ok(())
 }
