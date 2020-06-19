@@ -5,34 +5,13 @@ use serde::ser::{SerializeSeq, SerializeStruct, Serializer};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Prim {
-    pub prim: String,
-    pub args: Vec<Expr>,
-}
-
-impl Prim {
-    pub fn new(prim: &str, args: &[Expr]) -> Prim {
-        Prim {
-            prim: prim.into(),
-            args: args.iter().cloned().collect(),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum Expr {
     Int(BigInt),
     String(String),
     Bytes(Vec<u8>),
     List(Vec<Expr>),
-    Prim(Prim),
-}
-
-impl Expr {
-    pub fn prim(prim: &str, args: &[Expr]) -> Expr {
-        Expr::Prim(Prim::new(prim, args))
-    }
+    Prim { prim: String, args: Vec<Expr> },
 }
 
 impl Serialize for Expr {
@@ -65,7 +44,12 @@ impl Serialize for Expr {
                 }
                 seq.end()
             }
-            Expr::Prim(prim) => prim.serialize(serializer),
+            Expr::Prim { prim, args } => {
+                let mut state = serializer.serialize_struct("Expr", 2)?;
+                state.serialize_field("prim", prim)?;
+                state.serialize_field("args", args)?;
+                state.end()
+            }
         }
     }
 }
@@ -109,7 +93,7 @@ impl<'de> Visitor<'de> for ExprVisitor {
                     .ok_or_else(|| de::Error::custom("expecting \"args\" key"))?;
                 if key == "args" {
                     let args: Vec<Expr> = value.next_value()?;
-                    Ok(Expr::prim(prim, &args))
+                    Ok(Expr::Prim { prim, args })
                 } else {
                     Err(de::Error::custom(format!(
                         "expecting \"args\" but found \"{}\"",

@@ -1,7 +1,7 @@
 mod helper;
 mod michelson;
 
-use michelson::{Expr, Prim};
+use michelson::Expr;
 use num_bigint::{BigInt, BigUint};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -252,19 +252,22 @@ fn main() -> Result<(), TezosError> {
     //    dry_run_contract(&node_host, &chain_id, &branch)?
     //);
 
-    let arguments = Prim::new(
-        "Right",
-        &[Expr::prim(
-            "Right",
-            &[Expr::prim(
-                "Pair",
-                &[
-                    Expr::prim("Some", &[Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe])]),
+    let arguments = Expr::Prim {
+        prim: "Right".into(),
+        args: vec![Expr::Prim {
+            prim: "Right".into(),
+            args: vec![Expr::Prim {
+                prim: "Pair".into(),
+                args: vec![
+                    Expr::Prim {
+                        prim: "Some".into(),
+                        args: vec![Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe])],
+                    },
                     Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe]),
                 ],
-            )],
-        )],
-    );
+            }],
+        }],
+    };
 
     let s = serde_json::to_string(&arguments).unwrap();
     println!("{}", s);
