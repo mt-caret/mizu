@@ -3,7 +3,7 @@ mod michelson;
 
 use michelson::Expr;
 use num_bigint::{BigInt, BigUint};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
 use std::io;
 use thiserror::Error;
@@ -154,10 +154,11 @@ fn build_contract_operation(
                 [
                     { "kind": "transaction"
                     , "source": source
+                    , "fee": "0"
                     , "counter": counter.to_string()
                     , "gas_limit": gas_limit.to_string()
                     , "storage_limit": storage_limit.to_string()
-                    , "amount": 0
+                    , "amount": "0"
                     , "destination": destination
                     , "parameters":
                         { "entrypoint": "default"
@@ -173,10 +174,11 @@ fn build_contract_operation(
                 [
                     { "kind": "transaction"
                     , "source": source
+                    , "fee": "0"
                     , "counter": counter.to_string()
                     , "gas_limit": gas_limit.to_string()
                     , "storage_limit": storage_limit.to_string()
-                    , "amount": 0
+                    , "amount": "0"
                     , "destination": destination
                     , "parameters":
                         { "entrypoint": "default"
@@ -192,34 +194,33 @@ fn build_contract_operation(
 
 fn serialize_operation(host: &Url, op: Value) -> Result<String, TezosError> {
     let url = host
-        .join("chains/main/chain_id")
+        .join("chains/main/blocks/head/helpers/forge/operations")
         .map_err(TezosError::UrlParse)?;
 
     println!("{}", op);
 
     ureq::post(url.as_str())
         .send_json(op)
-        .into_string()
-        //.into_json_deserialize()
-        .map_err(TezosError::Deserialize)
-}
-
-fn dry_run_contract(host: &Url, op: Value, chain_id: &str) -> Result<Value, TezosError> {
-    let url = host
-        .join("chains/main/chain_id")
-        .map_err(TezosError::UrlParse)?;
-
-    let payload = serde_json::json!(
-        { "operation": op
-        , "chain_id": chain_id
-        }
-    );
-
-    ureq::post(url.as_str())
-        .send_json(payload)
         .into_json_deserialize()
         .map_err(TezosError::Deserialize)
 }
+
+//fn dry_run_contract(host: &Url, op: Value, chain_id: &str) -> Result<Value, TezosError> {
+//    let url = host
+//        .join("chains/main/blocks/head/helpers/scripts/run_operation")
+//        .map_err(TezosError::UrlParse)?;
+//
+//    let payload = serde_json::json!(
+//        { "operation": op
+//        , "chain_id": chain_id
+//        }
+//    );
+//
+//    ureq::post(url.as_str())
+//        .send_json(payload)
+//        .into_json_deserialize()
+//        .map_err(TezosError::Deserialize)
+//}
 
 fn main() -> Result<(), TezosError> {
     let node_host: Url =
@@ -281,11 +282,6 @@ fn main() -> Result<(), TezosError> {
     let sop = serialize_operation(&node_host, op)?;
 
     println!("serialized_operation: {}", sop);
-
-    //println!(
-    //    "dry_run_result: {}",
-    //    dry_run_contract(&node_host, &chain_id, &branch)?
-    //);
 
     Ok(())
 }
