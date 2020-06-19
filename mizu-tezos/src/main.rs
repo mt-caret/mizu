@@ -1,5 +1,7 @@
 mod helper;
+mod michelson;
 
+use michelson::{Expr, Prim};
 use num_bigint::{BigInt, BigUint};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -132,160 +134,116 @@ fn counter(host: &Url, contract_id: &str) -> Result<BigInt, TezosError> {
         .map_err(TezosError::Deserialize)
 }
 
-//#[derive(Serialize, Deserialize, Debug)]
-//struct MichelsonExpr {
-//    prim: String,
-//    args: Vec<MichelsonExpr>,
+//fn build_contract_operation(
+//    branch: &str,
+//    source: &str,
+//    counter: &BigInt,
+//    gas_limit: &BigInt,
+//    storage_limit: &BigInt,
+//    destination: &str,
+//    arguments: &MichelsonExpr,
+//) -> Value {
+//    serde_json::json!(
+//        { "branch": branch
+//        , "contents":
+//            [
+//                { "kind": "transaction"
+//                , "source": source
+//                , "counter": counter
+//                , "gas_limit": gas_limit
+//                , "storage_limit": storage_limit
+//                , "amount": 0
+//                , "destination": destination
+//                , "parameters":
+//                    { "entrypoint": "default"
+//                    , "value": arguments
+//                    }
+//                }
+//            ]
+//        }
+//    )
+//}
+//
+//fn serialize_operation(host: &Url, op: Value) -> Result<String, TezosError> {
+//    let url = host
+//        .join("chains/main/chain_id")
+//        .map_err(TezosError::UrlParse)?;
+//
+//    ureq::post(url.as_str())
+//        .send_json(op)
+//        .into_json_deserialize()
+//        .map_err(TezosError::Deserialize)
+//}
+//
+//fn dry_run_contract(
+//    host: &Url,
+//    chain_id: &str,
+//    branch: &str,
+//    signature: &str,
+//    source: &str,
+//    counter: &BigInt,
+//    gas_limit: &BigInt,
+//    storage_limit: &BigInt,
+//    destination: &str,
+//    arguments: &MichelsonExpr,
+//) -> Result<Value, TezosError> {
+//    let url = host
+//        .join("chains/main/chain_id")
+//        .map_err(TezosError::UrlParse)?;
+//
+//    let payload = serde_json::json!(
+//        { "operation":
+//            { "branch": branch
+//            , "contents":
+//                [
+//                    { "kind": "transaction"
+//                    , "source": source
+//                    , "counter": counter
+//                    , "gas_limit": gas_limit
+//                    , "storage_limit": storage_limit
+//                    , "amount": 0
+//                    , "destination": destination
+//                    , "parameters":
+//                      { "entrypoint": "default"
+//                      , "value": arguments
+//                    }
+//                    }
+//                ]
+//            , "signature": signature
+//            }
+//        , "chain_id": chain_id
+//        }
+//    );
+//
+//    ureq::post(url.as_str())
+//        .send_json(payload)
+//        .into_json_deserialize()
+//        .map_err(TezosError::Deserialize)
 //}
 
-#[derive(Serialize, Deserialize, Debug)]
-struct MichelsonPrim {
-    prim: String,
-    args: Vec<MichelsonExpr>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-enum MichelsonExpr {
-    Int(BigInt),
-    String(String),
-    Bytes(Vec<u8>),
-    List(Vec<MichelsonExpr>),
-    Prim(MichelsonPrim),
-}
-
-fn build_contract_operation(
-    branch: &str,
-    source: &str,
-    counter: &BigInt,
-    gas_limit: &BigInt,
-    storage_limit: &BigInt,
-    destination: &str,
-    arguments: &MichelsonExpr,
-) -> Value {
-    serde_json::json!(
-        { "branch": branch
-        , "contents":
-            [
-                { "kind": "transaction"
-                , "source": source
-                , "counter": counter
-                , "gas_limit": gas_limit
-                , "storage_limit": storage_limit
-                , "amount": 0
-                , "destination": destination
-                , "parameters":
-                    { "entrypoint": "default"
-                    , "value": arguments
-                    }
-                }
-            ]
-        }
-    )
-}
-
-fn serialize_operation(host: &Url, op: Value) -> Result<String, TezosError> {
-    let url = host
-        .join("chains/main/chain_id")
-        .map_err(TezosError::UrlParse)?;
-
-    ureq::post(url.as_str())
-        .send_json(op)
-        .into_json_deserialize()
-        .map_err(TezosError::Deserialize)
-}
-
-fn dry_run_contract(
-    host: &Url,
-    chain_id: &str,
-    branch: &str,
-    signature: &str,
-    source: &str,
-    counter: &BigInt,
-    gas_limit: &BigInt,
-    storage_limit: &BigInt,
-    destination: &str,
-    arguments: &MichelsonExpr,
-) -> Result<Value, TezosError> {
-    let url = host
-        .join("chains/main/chain_id")
-        .map_err(TezosError::UrlParse)?;
-
-    let payload = serde_json::json!(
-        { "operation":
-            { "branch": branch
-            , "contents":
-                [
-                    { "kind": "transaction"
-                    , "source": source
-                    , "counter": counter
-                    , "gas_limit": gas_limit
-                    , "storage_limit": storage_limit
-                    , "amount": 0
-                    , "destination": destination
-                    , "parameters":
-                      { "entrypoint": "default"
-                      , "value": arguments
-                    }
-                    }
-                ]
-            , "signature": signature
-            }
-        , "chain_id": chain_id
-        }
-    );
-
-    ureq::post(url.as_str())
-        .send_json(payload)
-        .into_json_deserialize()
-        .map_err(TezosError::Deserialize)
-}
-
 fn main() -> Result<(), TezosError> {
-    let node_host: Url =
-        Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
-    let source = ""; // TODO: fill
-    let contract_id = "tz1cPQbVEBSygG5dwbqsaPCMpU4ZdyTzjy97";
-    let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
-    //let arguments =
-    //    MichelsonExpr {
-    //        prim: "Right",
-    //        args: vec![
-    //            MichelsonExpr {
-    //                prim: "Right",
-    //                args: vec![
-    //                    MichelsonExpr {
-    //                        prim: "Pair",
-    //                        args: vec![
-    //                            MichelsonExpr {
-    //                                prim: "Some",
-    //                                args: vec![ ]
-    //                            },
-    //                            MichelsonExpr {
-    //                            }
-    //                        ]
-    //                    }
-    //                ]
-    //            }
-    //        ],
-    //    }
+    //let node_host: Url =
+    //    Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
+    //let source = ""; // TODO: fill
+    //let contract_id = "tz1cPQbVEBSygG5dwbqsaPCMpU4ZdyTzjy97";
+    //let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
+    //    let counter = counter(&node_host, &contract_id)?;
 
-    let counter = counter(&node_host, &contract_id)?;
+    //let bootstrapped = bootstrapped(&node_host)?;
 
-    let bootstrapped = bootstrapped(&node_host)?;
+    //println!("bootstrapped: {:?}", bootstrapped);
 
-    println!("bootstrapped: {:?}", bootstrapped);
+    //let constants = constants(&node_host)?;
 
-    let constants = constants(&node_host)?;
+    //println!("constants: {:?}", constants);
 
-    println!("constants: {:?}", constants);
+    //let branch = head_hash(&node_host)?;
 
-    let branch = head_hash(&node_host)?;
+    //println!("head hash: {}", branch);
 
-    println!("head hash: {}", branch);
+    //let chain_id = chain_id(&node_host)?;
 
-    let chain_id = chain_id(&node_host)?;
-
-    println!("chain_id: {}", chain_id);
+    //println!("chain_id: {}", chain_id);
 
     //let op = build_contract_operation(branch, &source, &counter, &constants.hard_gas_limit_per_operation, &constants.hard_storage_limit_per_operation, &destination
 
@@ -293,6 +251,22 @@ fn main() -> Result<(), TezosError> {
     //    "dry_run_result: {}",
     //    dry_run_contract(&node_host, &chain_id, &branch)?
     //);
+
+    let arguments = Prim::new(
+        "Right",
+        &[Expr::prim(
+            "Right",
+            &[Expr::prim(
+                "Pair",
+                &[
+                    Expr::prim("Some", &[Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe])]),
+                    Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe]),
+                ],
+            )],
+        )],
+    );
+
+    println!("{}", serde_json::to_string(&arguments).unwrap());
 
     Ok(())
 }
