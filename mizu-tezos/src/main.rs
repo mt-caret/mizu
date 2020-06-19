@@ -1,3 +1,4 @@
+mod crypto;
 mod helper;
 mod michelson;
 
@@ -17,6 +18,8 @@ enum TezosError {
     Deserialize(io::Error),
     #[error("deserialization error: {0}")]
     DeserializeBigInt(num_bigint::ParseBigIntError),
+    #[error("crypto error: {0}")]
+    Crypto(crypto::Error),
 }
 
 #[derive(Deserialize, Debug)]
@@ -223,65 +226,74 @@ fn serialize_operation(host: &Url, op: Value) -> Result<String, TezosError> {
 //}
 
 fn main() -> Result<(), TezosError> {
-    let node_host: Url =
-        Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
-    let source = "tz1cPQbVEBSygG5dwbqsaPCMpU4ZdyTzjy97";
-    let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
+    //let node_host: Url =
+    //    Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
+    //let source = "tz1cPQbVEBSygG5dwbqsaPCMpU4ZdyTzjy97";
+    //let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
 
-    let arguments = Expr::Prim {
-        prim: "Right".into(),
-        args: vec![Expr::Prim {
-            prim: "Right".into(),
-            args: vec![Expr::Prim {
-                prim: "Pair".into(),
-                args: vec![
-                    Expr::Prim {
-                        prim: "Some".into(),
-                        args: vec![Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe])],
-                    },
-                    Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe]),
-                ],
-            }],
-        }],
-    };
+    //let arguments = Expr::Prim {
+    //    prim: "Right".into(),
+    //    args: vec![Expr::Prim {
+    //        prim: "Right".into(),
+    //        args: vec![Expr::Prim {
+    //            prim: "Pair".into(),
+    //            args: vec![
+    //                Expr::Prim {
+    //                    prim: "Some".into(),
+    //                    args: vec![Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe])],
+    //                },
+    //                Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe]),
+    //            ],
+    //        }],
+    //    }],
+    //};
 
-    let s = serde_json::to_string(&arguments).unwrap();
-    println!("{}", s);
+    //let s = serde_json::to_string(&arguments).unwrap();
+    //println!("{}", s);
 
-    println!("{:?}", serde_json::from_str::<michelson::Expr>(&s));
+    //println!("{:?}", serde_json::from_str::<michelson::Expr>(&s));
 
-    let counter = counter(&node_host, &source)?;
+    //let counter = counter(&node_host, &source)?;
 
-    let bootstrapped = bootstrapped(&node_host)?;
+    //let bootstrapped = bootstrapped(&node_host)?;
 
-    println!("bootstrapped: {:?}", bootstrapped);
+    //println!("bootstrapped: {:?}", bootstrapped);
 
-    let constants = constants(&node_host)?;
+    //let constants = constants(&node_host)?;
 
-    println!("constants: {:?}", constants);
+    //println!("constants: {:?}", constants);
 
-    let branch = head_hash(&node_host)?;
+    //let branch = head_hash(&node_host)?;
 
-    println!("head hash: {}", branch);
+    //println!("head hash: {}", branch);
 
-    let chain_id = chain_id(&node_host)?;
+    //let chain_id = chain_id(&node_host)?;
 
-    println!("chain_id: {}", chain_id);
+    //println!("chain_id: {}", chain_id);
 
-    let op = build_contract_operation(
-        &branch,
-        &source,
-        &counter,
-        &constants.hard_gas_limit_per_operation,
-        &constants.hard_storage_limit_per_operation,
-        &destination,
-        &arguments,
-        None,
-    );
+    //let op = build_contract_operation(
+    //    &branch,
+    //    &source,
+    //    &counter,
+    //    &constants.hard_gas_limit_per_operation,
+    //    &constants.hard_storage_limit_per_operation,
+    //    &destination,
+    //    &arguments,
+    //    None,
+    //);
 
-    let sop = serialize_operation(&node_host, op)?;
+    //let sop = serialize_operation(&node_host, op)?;
 
-    println!("serialized_operation: {}", sop);
+    //println!("serialized_operation: {}", sop);
+    //
+    // edsigtj8xCXaDfeaZ6rtipaEbes6Fed25gqZcJ6Y4pnvwe1CxwjFcnG8vPVzhjaSsSN9GbhZZ4iyP2Um9pHxR3PfTbZCU1BU52Y
+
+    let serialized_operation = "8d8e2c08c23149adfe9445747db59a4681e99c09f32979cfdc2538cca4ec9aa26c00b7b62eb9907c9535ac59b68850e8ab4b1b8fa90a00a4df4280bd3fe0d4030001dd9737b9449948bdbd613cc5af72796e4563f26400ff000000001a05080508070705090a00000004cafebabe0a00000004cafebabe";
+    let public_key = "edpkuwY2nMXEdzhKd9PxsBfX4ZxZ78w2yoTbEN6yfq5HCGx1MnxDdj";
+    let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk";
+    let signature = crypto::sign_serialized_operation(serialized_operation, public_key, secret_key)
+        .map_err(TezosError::Crypto)?;
+    println!("{}", signature);
 
     Ok(())
 }
