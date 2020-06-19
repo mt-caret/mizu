@@ -266,7 +266,10 @@ fn main() -> Result<(), TezosError> {
         )],
     );
 
-    println!("{}", serde_json::to_string(&arguments).unwrap());
+    let s = serde_json::to_string(&arguments).unwrap();
+    println!("{}", s);
+
+    println!("{:?}", serde_json::from_str::<michelson::Expr>(&s));
 
     Ok(())
 }
