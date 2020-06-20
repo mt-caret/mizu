@@ -208,90 +208,104 @@ fn serialize_operation(host: &Url, op: Value) -> Result<String, TezosError> {
         .map_err(TezosError::Deserialize)
 }
 
-//fn dry_run_contract(host: &Url, op: Value, chain_id: &str) -> Result<Value, TezosError> {
-//    let url = host
-//        .join("chains/main/blocks/head/helpers/scripts/run_operation")
-//        .map_err(TezosError::UrlParse)?;
-//
-//    let payload = serde_json::json!(
-//        { "operation": op
-//        , "chain_id": chain_id
-//        }
-//    );
-//
-//    ureq::post(url.as_str())
-//        .send_json(payload)
-//        .into_json_deserialize()
-//        .map_err(TezosError::Deserialize)
-//}
+fn dry_run_contract(host: &Url, op: Value, chain_id: &str) -> Result<Value, TezosError> {
+    let url = host
+        .join("chains/main/blocks/head/helpers/scripts/run_operation")
+        .map_err(TezosError::UrlParse)?;
+
+    let payload = serde_json::json!(
+        { "operation": op
+        , "chain_id": chain_id
+        }
+    );
+
+    ureq::post(url.as_str())
+        .send_json(payload)
+        .into_json_deserialize()
+        .map_err(TezosError::Deserialize)
+}
 
 fn main() -> Result<(), TezosError> {
-    //let node_host: Url =
-    //    Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
-    //let source = "tz1cPQbVEBSygG5dwbqsaPCMpU4ZdyTzjy97";
-    //let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
-
-    //let arguments = Expr::Prim {
-    //    prim: "Right".into(),
-    //    args: vec![Expr::Prim {
-    //        prim: "Right".into(),
-    //        args: vec![Expr::Prim {
-    //            prim: "Pair".into(),
-    //            args: vec![
-    //                Expr::Prim {
-    //                    prim: "Some".into(),
-    //                    args: vec![Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe])],
-    //                },
-    //                Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe]),
-    //            ],
-    //        }],
-    //    }],
-    //};
-
-    //let s = serde_json::to_string(&arguments).unwrap();
-    //println!("{}", s);
-
-    //println!("{:?}", serde_json::from_str::<michelson::Expr>(&s));
-
-    //let counter = counter(&node_host, &source)?;
-
-    //let bootstrapped = bootstrapped(&node_host)?;
-
-    //println!("bootstrapped: {:?}", bootstrapped);
-
-    //let constants = constants(&node_host)?;
-
-    //println!("constants: {:?}", constants);
-
-    //let branch = head_hash(&node_host)?;
-
-    //println!("head hash: {}", branch);
-
-    //let chain_id = chain_id(&node_host)?;
-
-    //println!("chain_id: {}", chain_id);
-
-    //let op = build_contract_operation(
-    //    &branch,
-    //    &source,
-    //    &counter,
-    //    &constants.hard_gas_limit_per_operation,
-    //    &constants.hard_storage_limit_per_operation,
-    //    &destination,
-    //    &arguments,
-    //    None,
-    //);
-
-    //let sop = serialize_operation(&node_host, op)?;
-
-    //println!("serialized_operation: {}", sop);
-
-    let serialized_operation = "8d8e2c08c23149adfe9445747db59a4681e99c09f32979cfdc2538cca4ec9aa26c00b7b62eb9907c9535ac59b68850e8ab4b1b8fa90a00a4df4280bd3fe0d4030001dd9737b9449948bdbd613cc5af72796e4563f26400ff000000001a05080508070705090a00000004cafebabe0a00000004cafebabe";
+    let node_host: Url =
+        Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
+    let source = "tz1cPQbVEBSygG5dwbqsaPCMpU4ZdyTzjy97";
+    let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
     let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk";
-    let signature = crypto::sign_serialized_operation(serialized_operation, secret_key)
-        .map_err(TezosError::Crypto)?;
-    assert_eq!(signature, "edsigtj8xCXaDfeaZ6rtipaEbes6Fed25gqZcJ6Y4pnvwe1CxwjFcnG8vPVzhjaSsSN9GbhZZ4iyP2Um9pHxR3PfTbZCU1BU52Y");
-    println!("{}", signature);
+
+    let arguments = Expr::Prim {
+        prim: "Right".into(),
+        args: vec![Expr::Prim {
+            prim: "Right".into(),
+            args: vec![Expr::Prim {
+                prim: "Pair".into(),
+                args: vec![
+                    Expr::Prim {
+                        prim: "Some".into(),
+                        args: vec![Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe])],
+                    },
+                    Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe]),
+                ],
+            }],
+        }],
+    };
+
+    let s = serde_json::to_string(&arguments).unwrap();
+    println!("{}", s);
+
+    println!("{:?}", serde_json::from_str::<michelson::Expr>(&s));
+
+    let counter = counter(&node_host, &source)?;
+
+    let bootstrapped = bootstrapped(&node_host)?;
+
+    println!("bootstrapped: {:?}", bootstrapped);
+
+    let constants = constants(&node_host)?;
+
+    println!("constants: {:?}", constants);
+
+    let branch = head_hash(&node_host)?;
+
+    println!("head hash: {}", branch);
+
+    let chain_id = chain_id(&node_host)?;
+
+    println!("chain_id: {}", chain_id);
+
+    let op = build_contract_operation(
+        &branch,
+        &source,
+        &counter,
+        &constants.hard_gas_limit_per_operation,
+        &constants.hard_storage_limit_per_operation,
+        &destination,
+        &arguments,
+        None,
+    );
+
+    let sop = serialize_operation(&node_host, op)?;
+
+    println!("serialized_operation: {}", &sop);
+
+    let signature =
+        crypto::sign_serialized_operation(&sop, secret_key).map_err(TezosError::Crypto)?;
+
+    println!("signature: {}", signature);
+
+    let signed_op = build_contract_operation(
+        &branch,
+        &source,
+        &counter,
+        &constants.hard_gas_limit_per_operation,
+        &constants.hard_storage_limit_per_operation,
+        &destination,
+        &arguments,
+        Some(&signature),
+    );
+
+    let dry_run_result = dry_run_contract(&node_host, signed_op, &chain_id)?;
+
+    println!("dry_run_result: {:?}", dry_run_result);
 
     Ok(())
 }
