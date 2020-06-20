@@ -140,6 +140,8 @@ fn counter(host: &Url, address: &str) -> Result<BigInt, TezosError> {
     s.parse::<BigInt>().map_err(TezosError::DeserializeBigInt)
 }
 
+// TODO: fixme
+#[allow(clippy::too_many_arguments)]
 fn build_contract_operation(
     branch: &str,
     source: &str,
@@ -305,7 +307,7 @@ fn main() -> Result<(), TezosError> {
 
     let dry_run_result = dry_run_contract(&node_host, signed_op, &chain_id)?;
 
-    println!("dry_run_result: {:?}", dry_run_result);
+    println!("dry_run_result: {}", dry_run_result);
 
     Ok(())
 }
