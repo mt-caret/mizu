@@ -323,7 +323,7 @@ impl MizuOp {
 fn main() -> Result<(), TezosError> {
     let node_host: Url =
         Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
-    let source = "tz1cPQbVEBSygG5dwbqsaPCMpU4ZdyTzjy97".to_string();
+    let source = "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB".to_string();
     let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk".to_string();
     let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk".to_string();
 
@@ -400,13 +400,12 @@ fn main() -> Result<(), TezosError> {
 
     println!("serialized_operation: {}", &sop);
 
-    op.protocol = Some(PROTOCOL_CARTHAGE.to_string());
-
     let signature =
         crypto::sign_serialized_operation(&sop, &secret_key).map_err(TezosError::Crypto)?;
 
     println!("signature: {}", signature);
 
+    op.protocol = Some(PROTOCOL_CARTHAGE.to_string());
     op.signature = Some(signature);
 
     let preapply_result = preapply_operation(&node_host, &op)?;
