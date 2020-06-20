@@ -4,6 +4,7 @@ mod michelson;
 
 use michelson::Expr;
 use num_bigint::{BigInt, BigUint};
+use num_traits::Zero;
 use serde::Deserialize;
 use serde_json::Value;
 use std::io;
@@ -16,6 +17,8 @@ enum TezosError {
     UrlParse(url::ParseError),
     #[error("deserialization error: {0}")]
     Deserialize(io::Error),
+    #[error("deserialization error: {0}")]
+    SerdeDeserialize(serde_json::error::Error),
     #[error("deserialization error: {0}")]
     DeserializeBigInt(num_bigint::ParseBigIntError),
     #[error("crypto error: {0}")]
@@ -121,6 +124,10 @@ fn chain_id(host: &Url) -> Result<String, TezosError> {
         .map_err(TezosError::Deserialize)
 }
 
+fn deserialize_bigint(s: String) -> Result<BigInt, TezosError> {
+    s.parse::<BigInt>().map_err(TezosError::DeserializeBigInt)
+}
+
 fn counter(host: &Url, address: &str) -> Result<BigInt, TezosError> {
     let url = host
         .join(
@@ -137,7 +144,7 @@ fn counter(host: &Url, address: &str) -> Result<BigInt, TezosError> {
         .call()
         .into_json_deserialize()
         .map_err(TezosError::Deserialize)?;
-    s.parse::<BigInt>().map_err(TezosError::DeserializeBigInt)
+    deserialize_bigint(s)
 }
 
 // TODO: fixme
@@ -210,7 +217,18 @@ fn serialize_operation(host: &Url, op: Value) -> Result<String, TezosError> {
         .map_err(TezosError::Deserialize)
 }
 
-fn dry_run_contract(host: &Url, op: Value, chain_id: &str) -> Result<Value, TezosError> {
+#[derive(Debug)]
+struct DryRunResult {
+    consumed_gas: BigInt,
+    paid_storage_size_diff: BigInt,
+}
+
+fn deserialize_bigint_from_value(value: &Value) -> Result<BigInt, TezosError> {
+    let s = serde_json::value::from_value(value.clone()).map_err(TezosError::SerdeDeserialize)?;
+    deserialize_bigint(s)
+}
+
+fn dry_run_contract(host: &Url, op: Value, chain_id: &str) -> Result<DryRunResult, TezosError> {
     let url = host
         .join("chains/main/blocks/head/helpers/scripts/run_operation")
         .map_err(TezosError::UrlParse)?;
@@ -221,13 +239,29 @@ fn dry_run_contract(host: &Url, op: Value, chain_id: &str) -> Result<Value, Tezo
         }
     );
 
-    ureq::post(url.as_str())
+    let result: Value = ureq::post(url.as_str())
         .send_json(payload)
         .into_json_deserialize()
-        .map_err(TezosError::Deserialize)
+        .map_err(TezosError::Deserialize)?;
+
+    let op_result = &result["contents"][0]["metadata"]["operation_result"];
+    let consumed_gas = op_result
+        .get("consumed_gas")
+        .map(deserialize_bigint_from_value)
+        .unwrap_or_else(|| Ok(Zero::zero()))?;
+    let paid_storage_size_diff = op_result
+        .get("paid_storage_size_diff")
+        .map(deserialize_bigint_from_value)
+        .unwrap_or_else(|| Ok(Zero::zero()))?;
+
+    Ok(DryRunResult {
+        consumed_gas,
+        paid_storage_size_diff,
+    })
 }
 
 // TODO: test remaining enums
+#[allow(dead_code)]
 #[derive(Debug)]
 enum MizuOp {
     Post(Vec<Vec<u8>>, Vec<BigInt>),
@@ -262,8 +296,12 @@ fn main() -> Result<(), TezosError> {
     let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk";
 
     let arguments = MizuOp::Register(
-        Some(vec![0xca, 0xfe, 0xba, 0xbe]),
-        vec![0xca, 0xfe, 0xba, 0xbe],
+        Some(vec![
+            0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe,
+        ]),
+        vec![
+            0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe,
+        ],
     )
     .to_expr();
 
@@ -323,7 +361,11 @@ fn main() -> Result<(), TezosError> {
 
     let dry_run_result = dry_run_contract(&node_host, signed_op, &chain_id)?;
 
-    println!("dry_run_result: {}", dry_run_result);
+    println!("consumed_gas: {}", dry_run_result.consumed_gas);
+    println!(
+        "paid_storage_size_diff: {}",
+        dry_run_result.paid_storage_size_diff
+    );
 
     Ok(())
 }

@@ -57,7 +57,7 @@ pub mod seq_display_fromstr {
     }
 
     /// Serialize collection T using [IntoIterator] and [Display] for each element
-    #[allow(dead_code)]
+    #[allow(dead_code)] // TODO: fix
     pub fn serialize<S, T, I>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
