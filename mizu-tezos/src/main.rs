@@ -11,6 +11,8 @@ use std::io;
 use thiserror::Error;
 use url::Url;
 
+static PROTOCOL_CARTHAGE: &str = "PsCARTHAGazKbHtnKfLzQg3kms52kSRpgnDY982a9oYsSXRLQEb";
+
 #[derive(Error, Debug)]
 enum TezosError {
     #[error("failed to parse url: {0}")]
@@ -215,6 +217,21 @@ fn serialize_operation(host: &Url, op: &Operation) -> Result<String, TezosError>
         .map_err(TezosError::Deserialize)
 }
 
+fn serialize_operation_raw(host: &Url, op: &Operation) -> Result<String, TezosError> {
+    let url = host
+        .join("chains/main/blocks/head/helpers/forge/operations")
+        .map_err(TezosError::UrlParse)?;
+
+    let payload = build_json(op);
+
+    println!("{}", payload);
+
+    ureq::post(url.as_str())
+        .send_json(payload)
+        .into_string()
+        .map_err(TezosError::Deserialize)
+}
+
 #[derive(Debug)]
 struct DryRunResult {
     consumed_gas: BigInt,
@@ -260,6 +277,19 @@ fn dry_run_contract(
         consumed_gas,
         paid_storage_size_diff,
     })
+}
+
+fn preapply_operation(host: &Url, op: &Operation) -> Result<Value, TezosError> {
+    let url = host
+        .join("chains/main/blocks/head/helpers/preapply/operations")
+        .map_err(TezosError::UrlParse)?;
+
+    let payload = serde_json::json!(vec![build_json(op)]);
+
+    ureq::post(url.as_str())
+        .send_json(payload)
+        .into_json_deserialize()
+        .map_err(TezosError::Deserialize)
 }
 
 // TODO: test remaining enums
@@ -361,6 +391,27 @@ fn main() -> Result<(), TezosError> {
         "paid_storage_size_diff: {}",
         dry_run_result.paid_storage_size_diff
     );
+
+    op.gas_limit = dry_run_result.consumed_gas + 100;
+    op.storage_limit = dry_run_result.paid_storage_size_diff;
+    op.signature = None;
+
+    let sop = serialize_operation(&node_host, &op)?;
+
+    println!("serialized_operation: {}", &sop);
+
+    op.protocol = Some(PROTOCOL_CARTHAGE.to_string());
+
+    let signature =
+        crypto::sign_serialized_operation(&sop, &secret_key).map_err(TezosError::Crypto)?;
+
+    println!("signature: {}", signature);
+
+    op.signature = Some(signature);
+
+    let preapply_result = preapply_operation(&node_host, &op)?;
+
+    println!("preapply_result: {}", preapply_result);
 
     Ok(())
 }
