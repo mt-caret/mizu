@@ -227,6 +227,33 @@ fn dry_run_contract(host: &Url, op: Value, chain_id: &str) -> Result<Value, Tezo
         .map_err(TezosError::Deserialize)
 }
 
+// TODO: test remaining enums
+#[derive(Debug)]
+enum MizuOp {
+    Post(Vec<Vec<u8>>, Vec<BigInt>),
+    Poke(String, Vec<u8>),
+    Register(Option<Vec<u8>>, Vec<u8>),
+}
+
+impl MizuOp {
+    fn to_expr(&self) -> Expr {
+        match self {
+            MizuOp::Post(add, remove) => Expr::left(Expr::pair(
+                Expr::List(add.iter().cloned().map(Expr::Bytes).collect()),
+                Expr::List(remove.iter().cloned().map(Expr::nat).collect()),
+            )),
+            MizuOp::Poke(address, data) => Expr::right(Expr::left(Expr::pair(
+                Expr::String(address.to_string()),
+                Expr::Bytes(data.to_vec()),
+            ))),
+            MizuOp::Register(identity_key, prekey) => Expr::right(Expr::right(Expr::pair(
+                Expr::some(identity_key.clone().map(Expr::Bytes)),
+                Expr::Bytes(prekey.to_vec()),
+            ))),
+        }
+    }
+}
+
 fn main() -> Result<(), TezosError> {
     let node_host: Url =
         Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
@@ -234,22 +261,11 @@ fn main() -> Result<(), TezosError> {
     let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
     let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk";
 
-    let arguments = Expr::Prim {
-        prim: "Right".into(),
-        args: vec![Expr::Prim {
-            prim: "Right".into(),
-            args: vec![Expr::Prim {
-                prim: "Pair".into(),
-                args: vec![
-                    Expr::Prim {
-                        prim: "Some".into(),
-                        args: vec![Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe])],
-                    },
-                    Expr::Bytes(vec![0xca, 0xfe, 0xba, 0xbe]),
-                ],
-            }],
-        }],
-    };
+    let arguments = MizuOp::Register(
+        Some(vec![0xca, 0xfe, 0xba, 0xbe]),
+        vec![0xca, 0xfe, 0xba, 0xbe],
+    )
+    .to_expr();
 
     let s = serde_json::to_string(&arguments).unwrap();
     println!("{}", s);

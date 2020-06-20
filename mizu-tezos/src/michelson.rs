@@ -14,6 +14,45 @@ pub enum Expr {
     Prim { prim: String, args: Vec<Expr> },
 }
 
+impl Expr {
+    pub fn left(arg: Expr) -> Expr {
+        Expr::Prim {
+            prim: "Left".into(),
+            args: vec![arg],
+        }
+    }
+    pub fn right(arg: Expr) -> Expr {
+        Expr::Prim {
+            prim: "Right".into(),
+            args: vec![arg],
+        }
+    }
+    pub fn nat(value: BigInt) -> Expr {
+        Expr::Prim {
+            prim: "nat".into(),
+            args: vec![Expr::Int(value)],
+        }
+    }
+    pub fn pair(left: Expr, right: Expr) -> Expr {
+        Expr::Prim {
+            prim: "Pair".into(),
+            args: vec![left, right],
+        }
+    }
+    pub fn some(arg: Option<Expr>) -> Expr {
+        match arg {
+            Some(arg) => Expr::Prim {
+                prim: "Some".into(),
+                args: vec![arg],
+            },
+            None => Expr::Prim {
+                prim: "None".into(),
+                args: Vec::new(),
+            },
+        }
+    }
+}
+
 impl Serialize for Expr {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
