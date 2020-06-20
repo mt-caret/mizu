@@ -15,14 +15,14 @@ serde_json = "1.0"
 serde_with = "1.4.0"
 num-bigint = { version = "0.3", features = [ "serde" ] }
 hex = "0.4.2"
-ed25519-dalek = "0.9.1"
-
-# this is required for ed25519-dalek (https://github.com/dalek-cryptography/ed25519-dalek/issues/89)
-rand = "0.6"
 
 # TODO: crate with little usage, should check for issues
 base58check = "0.1.0"
 
 # The latest version of blake2 is 0.9.1, but have incompatible versions of
 # digest with ed25519-dalek
-blake2 = "0.8"
+blake2 = "0.9.0"
+digest = "0.9.0"
+
+signatory-ring = "0.20.0"
+signature = "1.1.0"

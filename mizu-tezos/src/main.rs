@@ -285,14 +285,12 @@ fn main() -> Result<(), TezosError> {
     //let sop = serialize_operation(&node_host, op)?;
 
     //println!("serialized_operation: {}", sop);
-    //
-    // edsigtj8xCXaDfeaZ6rtipaEbes6Fed25gqZcJ6Y4pnvwe1CxwjFcnG8vPVzhjaSsSN9GbhZZ4iyP2Um9pHxR3PfTbZCU1BU52Y
 
     let serialized_operation = "8d8e2c08c23149adfe9445747db59a4681e99c09f32979cfdc2538cca4ec9aa26c00b7b62eb9907c9535ac59b68850e8ab4b1b8fa90a00a4df4280bd3fe0d4030001dd9737b9449948bdbd613cc5af72796e4563f26400ff000000001a05080508070705090a00000004cafebabe0a00000004cafebabe";
-    let public_key = "edpkuwY2nMXEdzhKd9PxsBfX4ZxZ78w2yoTbEN6yfq5HCGx1MnxDdj";
     let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk";
-    let signature = crypto::sign_serialized_operation(serialized_operation, public_key, secret_key)
+    let signature = crypto::sign_serialized_operation(serialized_operation, secret_key)
         .map_err(TezosError::Crypto)?;
+    assert_eq!(signature, "edsigtj8xCXaDfeaZ6rtipaEbes6Fed25gqZcJ6Y4pnvwe1CxwjFcnG8vPVzhjaSsSN9GbhZZ4iyP2Um9pHxR3PfTbZCU1BU52Y");
     println!("{}", signature);
 
     Ok(())
