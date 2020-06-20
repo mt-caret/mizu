@@ -254,7 +254,7 @@ fn main() -> Result<(), TezosError> {
 
     println!("{:?}", serde_json::from_str::<michelson::Expr>(&s));
 
-    let counter = counter(&node_host, &source)?;
+    let counter = counter(&node_host, &source)? + 1;
 
     let bootstrapped = bootstrapped(&node_host)?;
 
