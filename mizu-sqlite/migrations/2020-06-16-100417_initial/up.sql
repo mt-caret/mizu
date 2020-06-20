@@ -1,6 +1,6 @@
 CREATE TABLE contacts(
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    public_key BLOB NOT NULL,
+    address BLOB NOT NULL, -- Tezos address
     name TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

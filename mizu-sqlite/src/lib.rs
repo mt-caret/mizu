@@ -1,4 +1,5 @@
 //! TODO: handle errors properly
+//! TODO: contactにidentity keyを足す(Client)
 
 #[macro_use]
 extern crate diesel;
@@ -19,6 +20,12 @@ pub struct MizuConnection {
 }
 
 impl MizuConnection {
+    pub fn connect(url: &str) -> Result<Self, ConnectionError> {
+        Ok(Self {
+            conn: SqliteConnection::establish(url)?,
+        })
+    }
+
     pub fn create_identity(&self, name: &str, x3dh: &X3DHClient) {
         diesel::insert_into(schema::identities::table)
             .values(&identity::NewIdentity {
@@ -32,6 +39,15 @@ impl MizuConnection {
     pub fn list_identities(&self) -> Vec<identity::Identity> {
         schema::identities::dsl::identities
             .load::<identity::Identity>(&self.conn)
+            .unwrap()
+    }
+
+    pub fn find_identity(&self, id: i32) -> identity::Identity {
+        use schema::identities::dsl::identities;
+
+        identities
+            .find(id)
+            .first::<identity::Identity>(&self.conn)
             .unwrap()
     }
 
@@ -57,9 +73,9 @@ impl MizuConnection {
             .unwrap();
     }
 
-    pub fn create_contact(&self, name: &str, public_key: &[u8]) {
+    pub fn create_contact(&self, name: &str, address: &[u8]) {
         diesel::insert_into(schema::contacts::table)
-            .values(&contact::NewContact { name, public_key })
+            .values(&contact::NewContact { name, address })
             .execute(&self.conn)
             .unwrap();
     }
@@ -67,6 +83,15 @@ impl MizuConnection {
     pub fn list_contacts(&self) -> Vec<contact::Contact> {
         schema::contacts::dsl::contacts
             .load::<contact::Contact>(&self.conn)
+            .unwrap()
+    }
+
+    pub fn find_contact(&self, contact_id: i32) -> contact::Contact {
+        use schema::contacts::dsl::contacts;
+
+        contacts
+            .find(contact_id)
+            .first::<contact::Contact>(&self.conn)
             .unwrap()
     }
 
@@ -79,12 +104,12 @@ impl MizuConnection {
             .unwrap()
     }
 
-    pub fn create_client(&self, identity_id: i32, contact_id: i32, client_data: &[u8]) {
+    pub fn create_client(&self, identity_id: i32, contact_id: i32, client: &Client) {
         diesel::insert_into(schema::clients::table)
             .values(&client::NewClient {
                 identity_id,
                 contact_id,
-                client_data,
+                client_data: &bincode::serialize(client).unwrap(),
             })
             .execute(&self.conn)
             .unwrap();
@@ -96,12 +121,13 @@ impl MizuConnection {
             .unwrap()
     }
 
-    pub fn find_client(&self, identity_id: i32, contact_id: i32) -> client::Client {
+    pub fn find_client(&self, identity_id: i32, contact_id: i32) -> Option<client::Client> {
         use schema::clients::dsl;
 
         dsl::clients
             .find((identity_id, contact_id))
             .first(&self.conn)
+            .optional()
             .unwrap()
     }
 
@@ -140,10 +166,4 @@ impl MizuConnection {
             .load::<message::Message>(&self.conn)
             .unwrap()
     }
-}
-
-pub fn connect(url: &str) -> Result<MizuConnection, ConnectionError> {
-    Ok(MizuConnection {
-        conn: SqliteConnection::establish(url)?,
-    })
 }

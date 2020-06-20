@@ -9,7 +9,7 @@ table! {
 table! {
     contacts (id) {
         id -> Integer,
-        public_key -> Binary,
+        address -> Binary,
         name -> Text,
         created_at -> Text,
     }
@@ -35,6 +35,8 @@ table! {
 }
 
 joinable!(clients -> contacts (contact_id));
+joinable!(clients -> identities (identity_id));
 joinable!(messages -> contacts (contact_id));
+joinable!(messages -> identities (identity_id));
 
 allow_tables_to_appear_in_same_query!(clients, contacts, identities, messages,);
