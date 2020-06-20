@@ -147,72 +147,70 @@ fn counter(host: &Url, address: &str) -> Result<BigInt, TezosError> {
     deserialize_bigint(s)
 }
 
-// TODO: fixme
-#[allow(clippy::too_many_arguments)]
-fn build_contract_operation(
-    branch: &str,
-    source: &str,
-    counter: &BigInt,
-    gas_limit: &BigInt,
-    storage_limit: &BigInt,
-    destination: &str,
-    arguments: &Expr,
-    signature: Option<&str>,
-) -> Value {
-    match signature {
-        None => serde_json::json!(
-            { "branch": branch
-            , "contents":
-                [
-                    { "kind": "transaction"
-                    , "source": source
-                    , "fee": "0"
-                    , "counter": counter.to_string()
-                    , "gas_limit": gas_limit.to_string()
-                    , "storage_limit": storage_limit.to_string()
-                    , "amount": "0"
-                    , "destination": destination
-                    , "parameters":
-                        { "entrypoint": "default"
-                        , "value": arguments
-                        }
-                    }
-                ]
-            }
-        ),
-        Some(signature) => serde_json::json!(
-            { "branch": branch
-            , "contents":
-                [
-                    { "kind": "transaction"
-                    , "source": source
-                    , "fee": "0"
-                    , "counter": counter.to_string()
-                    , "gas_limit": gas_limit.to_string()
-                    , "storage_limit": storage_limit.to_string()
-                    , "amount": "0"
-                    , "destination": destination
-                    , "parameters":
-                        { "entrypoint": "default"
-                        , "value": arguments
-                        }
-                    }
-                ]
-            , "signature": signature
-            }
-        ),
-    }
+#[derive(Debug)]
+struct Operation {
+    protocol: Option<String>,
+    signature: Option<String>,
+    branch: String,
+    source: String,
+    destination: String,
+    fee: BigInt,
+    counter: BigInt,
+    gas_limit: BigInt,
+    storage_limit: BigInt,
+    parameters: Expr,
 }
 
-fn serialize_operation(host: &Url, op: Value) -> Result<String, TezosError> {
+fn build_json(op: &Operation) -> Value {
+    let mut value = serde_json::json!(
+        { "branch": op.branch
+            , "contents":
+                [
+                    { "kind": "transaction"
+                    , "source": op.source
+                    , "fee": op.fee.to_string()
+                    , "counter": op.counter.to_string()
+                    , "gas_limit": op.gas_limit.to_string()
+                    , "storage_limit": op.storage_limit.to_string()
+                    , "amount": "0"
+                    , "destination": op.destination
+                    , "parameters":
+                        { "entrypoint": "default"
+                        , "value": op.parameters
+                        }
+                    }
+                ]
+        }
+    );
+
+    if let Some(protocol) = &op.protocol {
+        value
+            .as_object_mut()
+            .expect("value is an object")
+            .insert("protocol".into(), Value::String(protocol.into()));
+    }
+
+    if let Some(signature) = &op.signature {
+        value
+            .as_object_mut()
+            .expect("value is an object")
+            .insert("signature".into(), Value::String(signature.into()));
+    }
+
+    value
+}
+
+fn serialize_operation(host: &Url, op: &Operation) -> Result<String, TezosError> {
     let url = host
         .join("chains/main/blocks/head/helpers/forge/operations")
         .map_err(TezosError::UrlParse)?;
 
-    println!("{}", op);
+    let payload = build_json(op);
+
+    println!("{}", payload);
 
     ureq::post(url.as_str())
-        .send_json(op)
+        .send_json(payload)
         .into_json_deserialize()
         .map_err(TezosError::Deserialize)
 }
@@ -228,13 +226,17 @@ fn deserialize_bigint_from_value(value: &Value) -> Result<BigInt, TezosError> {
     deserialize_bigint(s)
 }
 
-fn dry_run_contract(host: &Url, op: Value, chain_id: &str) -> Result<DryRunResult, TezosError> {
+fn dry_run_contract(
+    host: &Url,
+    op: &Operation,
+    chain_id: &str,
+) -> Result<DryRunResult, TezosError> {
     let url = host
         .join("chains/main/blocks/head/helpers/scripts/run_operation")
         .map_err(TezosError::UrlParse)?;
 
     let payload = serde_json::json!(
-        { "operation": op
+        { "operation": build_json(op)
         , "chain_id": chain_id
         }
     );
@@ -291,11 +293,11 @@ impl MizuOp {
 fn main() -> Result<(), TezosError> {
     let node_host: Url =
         Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
-    let source = "tz1cPQbVEBSygG5dwbqsaPCMpU4ZdyTzjy97";
-    let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
-    let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk";
+    let source = "tz1cPQbVEBSygG5dwbqsaPCMpU4ZdyTzjy97".to_string();
+    let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk".to_string();
+    let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk".to_string();
 
-    let arguments = MizuOp::Register(
+    let parameters = MizuOp::Register(
         Some(vec![
             0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe,
         ]),
@@ -305,7 +307,7 @@ fn main() -> Result<(), TezosError> {
     )
     .to_expr();
 
-    let s = serde_json::to_string(&arguments).unwrap();
+    let s = serde_json::to_string(&parameters).unwrap();
     println!("{}", s);
 
     println!("{:?}", serde_json::from_str::<michelson::Expr>(&s));
@@ -328,38 +330,31 @@ fn main() -> Result<(), TezosError> {
 
     println!("chain_id: {}", chain_id);
 
-    let op = build_contract_operation(
-        &branch,
-        &source,
-        &counter,
-        &constants.hard_gas_limit_per_operation,
-        &constants.hard_storage_limit_per_operation,
-        &destination,
-        &arguments,
-        None,
-    );
+    let mut op = Operation {
+        branch,
+        source,
+        counter,
+        fee: Zero::zero(),
+        gas_limit: constants.hard_gas_limit_per_operation,
+        storage_limit: constants.hard_storage_limit_per_operation,
+        destination,
+        parameters,
+        protocol: None,
+        signature: None,
+    };
 
-    let sop = serialize_operation(&node_host, op)?;
+    let sop = serialize_operation(&node_host, &op)?;
 
     println!("serialized_operation: {}", &sop);
 
     let signature =
-        crypto::sign_serialized_operation(&sop, secret_key).map_err(TezosError::Crypto)?;
+        crypto::sign_serialized_operation(&sop, &secret_key).map_err(TezosError::Crypto)?;
 
     println!("signature: {}", signature);
 
-    let signed_op = build_contract_operation(
-        &branch,
-        &source,
-        &counter,
-        &constants.hard_gas_limit_per_operation,
-        &constants.hard_storage_limit_per_operation,
-        &destination,
-        &arguments,
-        Some(&signature),
-    );
+    op.signature = Some(signature);
 
-    let dry_run_result = dry_run_contract(&node_host, signed_op, &chain_id)?;
+    let dry_run_result = dry_run_contract(&node_host, &op, &chain_id)?;
 
     println!("consumed_gas: {}", dry_run_result.consumed_gas);
     println!(
