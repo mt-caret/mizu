@@ -1,0 +1,16 @@
+[package]
+name = "mizu-driver"
+version = "0.1.0"
+authors = ["pandaman64 <kointosudesuyo@infoseek.jp>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+mizu-crypto = { path = "../mizu-crypto" }
+mizu-sqlite = { path = "../mizu-sqlite" }
+tezos-mock = { path = "../tezos-mock" }
+tezos-interface = { path = "../tezos-interface" }
+bincode = "1.2.1"
+rustyline = "6.2.0"
+rand = "0.7.3"

@@ -5,4 +5,5 @@ members = [
     "mizu-sqlite",
     "tezos-interface",
     "tezos-mock",
+    "mizu-driver",
 ]
