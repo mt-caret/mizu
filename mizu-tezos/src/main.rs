@@ -217,21 +217,6 @@ fn serialize_operation(host: &Url, op: &Operation) -> Result<String, TezosError>
         .map_err(TezosError::Deserialize)
 }
 
-fn serialize_operation_raw(host: &Url, op: &Operation) -> Result<String, TezosError> {
-    let url = host
-        .join("chains/main/blocks/head/helpers/forge/operations")
-        .map_err(TezosError::UrlParse)?;
-
-    let payload = build_json(op);
-
-    println!("{}", payload);
-
-    ureq::post(url.as_str())
-        .send_json(payload)
-        .into_string()
-        .map_err(TezosError::Deserialize)
-}
-
 #[derive(Debug)]
 struct DryRunResult {
     consumed_gas: BigInt,
@@ -285,6 +270,19 @@ fn preapply_operation(host: &Url, op: &Operation) -> Result<Value, TezosError> {
         .map_err(TezosError::UrlParse)?;
 
     let payload = serde_json::json!(vec![build_json(op)]);
+
+    ureq::post(url.as_str())
+        .send_json(payload)
+        .into_json_deserialize()
+        .map_err(TezosError::Deserialize)
+}
+
+fn inject_operation(host: &Url, signed_sop: &str) -> Result<Value, TezosError> {
+    let url = host
+        .join("injection/operation?chain=main")
+        .map_err(TezosError::UrlParse)?;
+
+    let payload = serde_json::json!(signed_sop);
 
     ureq::post(url.as_str())
         .send_json(payload)
@@ -377,7 +375,7 @@ fn main() -> Result<(), TezosError> {
 
     println!("serialized_operation: {}", &sop);
 
-    let signature =
+    let (signature, _) =
         crypto::sign_serialized_operation(&sop, &secret_key).map_err(TezosError::Crypto)?;
 
     println!("signature: {}", signature);
@@ -400,7 +398,7 @@ fn main() -> Result<(), TezosError> {
 
     println!("serialized_operation: {}", &sop);
 
-    let signature =
+    let (signature, raw_signature) =
         crypto::sign_serialized_operation(&sop, &secret_key).map_err(TezosError::Crypto)?;
 
     println!("signature: {}", signature);
@@ -410,7 +408,17 @@ fn main() -> Result<(), TezosError> {
 
     let preapply_result = preapply_operation(&node_host, &op)?;
 
-    println!("preapply_result: {}", preapply_result);
+    if preapply_result[0].get("id").is_some() {
+        // some error occurred
+        println!("preapply error: {}", preapply_result);
+    } else {
+        println!("preapply_result: {}", preapply_result);
+
+        let signed_sop = [sop, hex::encode(raw_signature)].concat();
+        let inject_result = inject_operation(&node_host, &signed_sop)?;
+
+        println!("inject_result: {}", inject_result);
+    }
 
     Ok(())
 }

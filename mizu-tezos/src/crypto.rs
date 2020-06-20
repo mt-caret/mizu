@@ -28,7 +28,7 @@ fn base58check_decode(input: &str) -> Result<Vec<u8>, Error> {
 pub fn sign_serialized_operation(
     serialized_operation: &str,
     secret_key: &str,
-) -> Result<String, Error> {
+) -> Result<(String, Vec<u8>), Error> {
     let op = hex::decode(&serialized_operation).map_err(Error::HexDecode)?;
 
     if &secret_key[0..4] != "edsk" {
@@ -53,7 +53,10 @@ pub fn sign_serialized_operation(
 
     println!("sig: {}", hex::encode(&signature.to_vec()));
 
-    Ok([vec![0xf5, 0xcd, 0x86, 0x12], signature.to_vec()]
-        .concat()
-        .to_base58check(0x09))
+    Ok((
+        [vec![0xf5, 0xcd, 0x86, 0x12], signature.to_vec()]
+            .concat()
+            .to_base58check(0x09),
+        signature.to_vec(),
+    ))
 }
