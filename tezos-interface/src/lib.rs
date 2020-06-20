@@ -16,7 +16,7 @@ pub struct UserData {
 
 pub trait Tezos {
     // Read
-    fn retrieve_user_data(&self, address: &[u8]) -> UserData;
+    fn retrieve_user_data(&self, address: &[u8]) -> Option<UserData>;
 
     // Update
     // TODO: I don't think double slices is a good interface, as we can't pass &[Vec<u8>] for example.

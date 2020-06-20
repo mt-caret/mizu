@@ -24,7 +24,7 @@ impl TezosMock {
 }
 
 impl Tezos for TezosMock {
-    fn retrieve_user_data(&self, address: &[u8]) -> UserData {
+    fn retrieve_user_data(&self, address: &[u8]) -> Option<UserData> {
         // According to https://docs.diesel.rs/diesel/associations/index.html,
         // selecting three tables is better than joining them.
         // TODO: run queries within a transaction?
@@ -35,7 +35,8 @@ impl Tezos for TezosMock {
         let user = users_dsl::users
             .filter(users_dsl::address.eq(address))
             .first::<user::User>(&self.conn)
-            .unwrap();
+            .optional()
+            .unwrap()?;
         let messages = message::Message::belonging_to(&user)
             .order(messages_dsl::id.asc())
             .load::<message::Message>(&self.conn)
@@ -45,7 +46,7 @@ impl Tezos for TezosMock {
             .load::<poke::Poke>(&self.conn)
             .unwrap();
 
-        UserData {
+        Some(UserData {
             identity_key: user.identity_key,
             prekey: user.prekey,
             postal_box: messages
@@ -56,7 +57,7 @@ impl Tezos for TezosMock {
                 })
                 .collect(),
             pokes: pokes.into_iter().map(|p| p.content).collect(),
-        }
+        })
     }
 
     fn post(&self, sender_address: &[u8], add: &[&[u8]], remove: &[&usize]) {
