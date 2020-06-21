@@ -14,3 +14,5 @@ tezos-interface = { path = "../tezos-interface" }
 bincode = "1.2.1"
 rustyline = "6.2.0"
 rand = "0.7.3"
+thiserror = "1.0.20"
+diesel = "1.4.5"

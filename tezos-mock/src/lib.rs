@@ -18,7 +18,7 @@ pub struct TezosMock {
 }
 
 impl TezosMock {
-    pub fn new(url: &str) -> ConnectionResult<Self> {
+    pub fn connect(url: &str) -> ConnectionResult<Self> {
         Ok(TezosMock {
             conn: SqliteConnection::establish(url)?,
         })
