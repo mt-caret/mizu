@@ -283,14 +283,25 @@ fn get<'a>(address: &'a [u8], tezos: &'a TezosMock, user_data: &'a MizuConnectio
                     let mut latest_message_timestamp = client.latest_message_timestamp;
                     let mut client: Client = bincode::deserialize(&client.client_data).unwrap();
                     for message in their_data.postal_box.iter() {
+                        // assuming message is ordered
                         let timestamp = message.timestamp;
+                        match latest_message_timestamp {
+                            // if the message is older than recorded timestamp, skip it.
+                            Some(latest_message_timestamp)
+                                if latest_message_timestamp >= timestamp =>
+                            {
+                                continue;
+                            }
+                            _ => {
+                                latest_message_timestamp = Some(timestamp);
+                            }
+                        }
+
                         let message = bincode::deserialize(&message.content).unwrap();
                         if let Ok(message) = client.attempt_message_decryption(&mut rng, message) {
                             user_data
                                 .create_message(our_identity_id, their_contact_id, &message)
                                 .map_err(UserData)?;
-                            // assuming message is ordered
-                            latest_message_timestamp = Some(timestamp);
                             println!("received {:?}", message);
                         }
                     }
@@ -309,14 +320,13 @@ fn get<'a>(address: &'a [u8], tezos: &'a TezosMock, user_data: &'a MizuConnectio
                         Client::with_x3dh_client(our_x3dh, address, &their_contact.address);
                     let mut latest_message_timestamp = None;
                     for message in their_data.postal_box.iter() {
-                        let timestamp = message.timestamp;
+                        latest_message_timestamp = Some(message.timestamp);
                         let message = bincode::deserialize(&message.content).unwrap();
                         if let Ok(message) = client.attempt_message_decryption(&mut rng, message) {
                             user_data
                                 .create_message(our_identity_id, their_contact_id, &message)
                                 .map_err(UserData)?;
                             // assuming message is ordered
-                            latest_message_timestamp = Some(timestamp);
                             println!("received {:?}", message);
                         }
                     }
