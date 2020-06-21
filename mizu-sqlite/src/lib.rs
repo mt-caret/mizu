@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate diesel;
 
+use chrono::naive::NaiveDateTime;
 use diesel::prelude::*;
 use mizu_crypto::x3dh::X3DHClient;
 use mizu_crypto::Client;
@@ -99,12 +100,19 @@ impl MizuConnection {
             .load::<contact::Contact>(&self.conn)
     }
 
-    pub fn create_client(&self, identity_id: i32, contact_id: i32, client: &Client) -> Result<()> {
+    pub fn create_client(
+        &self,
+        identity_id: i32,
+        contact_id: i32,
+        client: &Client,
+        latest_message_timestamp: Option<&NaiveDateTime>,
+    ) -> Result<()> {
         diesel::insert_into(schema::clients::table)
             .values(&client::NewClient {
                 identity_id,
                 contact_id,
                 client_data: &bincode::serialize(client).unwrap(),
+                latest_message_timestamp,
             })
             .execute(&self.conn)?;
 
@@ -124,12 +132,21 @@ impl MizuConnection {
             .optional()
     }
 
-    pub fn update_client(&self, identity_id: i32, contact_id: i32, client: &Client) -> Result<()> {
+    pub fn update_client(
+        &self,
+        identity_id: i32,
+        contact_id: i32,
+        client: &Client,
+        latest_message_timestamp: Option<&NaiveDateTime>,
+    ) -> Result<()> {
         use schema::clients::dsl;
 
         let target = dsl::clients.find((identity_id, contact_id));
         diesel::update(target)
-            .set(dsl::client_data.eq(bincode::serialize(client).unwrap()))
+            .set(client::UpdateClient {
+                client_data: &bincode::serialize(client).unwrap(),
+                latest_message_timestamp,
+            })
             .execute(&self.conn)?;
 
         Ok(())

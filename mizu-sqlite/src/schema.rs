@@ -3,6 +3,7 @@ table! {
         identity_id -> Integer,
         contact_id -> Integer,
         client_data -> Binary,
+        latest_message_timestamp -> Nullable<Timestamp>,
     }
 }
 
@@ -11,7 +12,7 @@ table! {
         id -> Integer,
         address -> Binary,
         name -> Text,
-        created_at -> Text,
+        created_at -> Timestamp,
     }
 }
 
@@ -20,7 +21,7 @@ table! {
         id -> Integer,
         name -> Text,
         x3dh_client -> Binary,
-        created_at -> Text,
+        created_at -> Timestamp,
     }
 }
 
@@ -30,7 +31,7 @@ table! {
         identity_id -> Integer,
         contact_id -> Integer,
         content -> Binary,
-        created_at -> Text,
+        created_at -> Timestamp,
     }
 }
 
