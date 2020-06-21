@@ -17,10 +17,10 @@ static PROTOCOL_CARTHAGE: &str = "PsCARTHAGazKbHtnKfLzQg3kms52kSRpgnDY982a9oYsSX
 enum TezosError {
     #[error("failed to parse url: {0}")]
     UrlParse(url::ParseError),
-    #[error("deserialization error: {0}")]
-    Deserialize(io::Error),
-    #[error("deserialization error: {0}")]
-    SerdeDeserialize(serde_json::error::Error),
+    #[error("error: {0}")]
+    IO(io::Error),
+    #[error("deserialization error: {0} ({1})")]
+    SerdeDeserialize(serde_json::error::Error, Value),
     #[error("deserialization error: {0}")]
     DeserializeBigInt(num_bigint::ParseBigIntError),
     #[error("crypto error: {0}")]
@@ -42,8 +42,9 @@ fn bootstrapped(host: &Url) -> Result<Bootstrapped, TezosError> {
 
     ureq::get(url.as_str())
         .call()
-        .into_json_deserialize()
-        .map_err(TezosError::Deserialize)
+        .into_json()
+        .map_err(TezosError::IO)
+        .and_then(|x| from_value(&x))
 }
 
 #[derive(Deserialize, Debug)]
@@ -102,8 +103,9 @@ fn constants(host: &Url) -> Result<Constants, TezosError> {
 
     ureq::get(url.as_str())
         .call()
-        .into_json_deserialize()
-        .map_err(TezosError::Deserialize)
+        .into_json()
+        .map_err(TezosError::IO)
+        .and_then(|x| from_value(&x))
 }
 
 fn head_hash(host: &Url) -> Result<String, TezosError> {
@@ -113,8 +115,9 @@ fn head_hash(host: &Url) -> Result<String, TezosError> {
 
     ureq::get(url.as_str())
         .call()
-        .into_json_deserialize()
-        .map_err(TezosError::Deserialize)
+        .into_json()
+        .map_err(TezosError::IO)
+        .and_then(|x| from_value(&x))
 }
 
 fn chain_id(host: &Url) -> Result<String, TezosError> {
@@ -124,8 +127,9 @@ fn chain_id(host: &Url) -> Result<String, TezosError> {
 
     ureq::get(url.as_str())
         .call()
-        .into_json_deserialize()
-        .map_err(TezosError::Deserialize)
+        .into_json()
+        .map_err(TezosError::IO)
+        .and_then(|x| from_value(&x))
 }
 
 fn parse_bigint(s: String) -> Result<BigInt, TezosError> {
@@ -146,8 +150,9 @@ fn counter(host: &Url, address: &str) -> Result<BigInt, TezosError> {
 
     let s: String = ureq::get(url.as_str())
         .call()
-        .into_json_deserialize()
-        .map_err(TezosError::Deserialize)?;
+        .into_json()
+        .map_err(TezosError::IO)
+        .and_then(|x| from_value(&x))?;
     parse_bigint(s)
 }
 
@@ -213,8 +218,9 @@ fn serialize_operation(host: &Url, op: &Operation) -> Result<String, TezosError>
 
     ureq::post(url.as_str())
         .send_json(payload)
-        .into_json_deserialize()
-        .map_err(TezosError::Deserialize)
+        .into_json()
+        .map_err(TezosError::IO)
+        .and_then(|x| from_value(&x))
 }
 
 #[derive(Debug)]
@@ -227,7 +233,8 @@ fn from_value<T>(value: &Value) -> Result<T, TezosError>
 where
     T: serde::de::DeserializeOwned,
 {
-    serde_json::value::from_value(value.clone()).map_err(TezosError::SerdeDeserialize)
+    serde_json::value::from_value(value.clone())
+        .map_err(|e| TezosError::SerdeDeserialize(e, value.clone()))
 }
 
 fn deserialize_bigint_from_value(value: &Value) -> Result<BigInt, TezosError> {
@@ -251,8 +258,9 @@ fn dry_run_contract(
 
     let result: Value = ureq::post(url.as_str())
         .send_json(payload)
-        .into_json_deserialize()
-        .map_err(TezosError::Deserialize)?;
+        .into_json()
+        .map_err(TezosError::IO)
+        .and_then(|x| from_value(&x))?;
 
     let op_result = &result["contents"][0]["metadata"]["operation_result"];
     let consumed_gas = op_result
@@ -279,8 +287,9 @@ fn preapply_operation(host: &Url, op: &Operation) -> Result<Value, TezosError> {
 
     ureq::post(url.as_str())
         .send_json(payload)
-        .into_json_deserialize()
-        .map_err(TezosError::Deserialize)
+        .into_json()
+        .map_err(TezosError::IO)
+        .and_then(|x| from_value(&x))
 }
 
 fn inject_operation(host: &Url, signed_sop: &str) -> Result<Value, TezosError> {
@@ -292,8 +301,9 @@ fn inject_operation(host: &Url, signed_sop: &str) -> Result<Value, TezosError> {
 
     ureq::post(url.as_str())
         .send_json(payload)
-        .into_json_deserialize()
-        .map_err(TezosError::Deserialize)
+        .into_json()
+        .map_err(TezosError::IO)
+        .and_then(|x| from_value(&x))
 }
 
 // TODO: test remaining enums
