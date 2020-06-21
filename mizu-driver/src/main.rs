@@ -1,3 +1,7 @@
+//! TODO: all deserialization shouldn't unwrap
+//! TODO: consider error conditions of encryption
+//! TODO: refactor out common logic
+
 use mizu_crypto::{
     keys::{IdentityPublicKey, PrekeyPublicKey},
     x3dh::X3DHClient,

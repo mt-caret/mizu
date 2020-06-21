@@ -27,6 +27,7 @@ pub trait Tezos {
     // Update
     // TODO: I don't think double slices is a good interface, as we can't pass &[Vec<u8>] for example.
     // The best I came up with is taking `A: IntoIter<&[u8]>`, but it will break object safety...
+    // TODO: remove should take `BigUint`s
     fn post(&self, add: &[&[u8]], remove: &[&usize]) -> Result<(), Self::WriteError>;
     fn poke(&self, target_address: &[u8], data: &[u8]) -> Result<(), Self::WriteError>;
     fn register(&self, identity_key: Option<&[u8]>, prekey: &[u8]) -> Result<(), Self::WriteError>;

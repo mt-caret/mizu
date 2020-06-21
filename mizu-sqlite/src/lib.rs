@@ -1,5 +1,4 @@
-//! TODO: handle errors properly
-//! TODO: contactにidentity keyを足す(Client)
+// All of the `unwrap()`s in this module are serializing clients and they should succeed.
 
 #[macro_use]
 extern crate diesel;
