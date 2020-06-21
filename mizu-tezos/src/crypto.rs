@@ -36,7 +36,6 @@ pub fn sign_serialized_operation(
     }
 
     let secret_key = &base58check_decode(secret_key)?[4..];
-    println!("secret_key: {}", hex::encode(&secret_key));
     let signer: ed25519::Signer = (&ed25519::Seed::from_bytes(&secret_key)
         .ok_or_else(|| Error::SeedLength(secret_key.len()))?)
         .into();
@@ -44,14 +43,11 @@ pub fn sign_serialized_operation(
     let mut hasher = VarBlake2b::new(32).expect("32 byte output should be valid for blake2b");
     hasher.update(&[vec![0x03], op].concat());
     let hash = hasher.finalize_boxed();
-    println!("hash: {}", hex::encode(&hash));
 
     let signature = signer
         .try_sign(&hash)
         .map_err(|_| Error::Signature)?
         .to_bytes();
-
-    println!("sig: {}", hex::encode(&signature.to_vec()));
 
     Ok((
         [vec![0xf5, 0xcd, 0x86, 0x12], signature.to_vec()]

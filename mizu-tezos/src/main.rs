@@ -25,6 +25,8 @@ enum TezosError {
     DeserializeBigInt(num_bigint::ParseBigIntError),
     #[error("crypto error: {0}")]
     Crypto(crypto::Error),
+    #[error("tezos node rpc error: {0}")]
+    Rpc(Value),
 }
 
 #[derive(Deserialize, Debug)]
@@ -126,7 +128,7 @@ fn chain_id(host: &Url) -> Result<String, TezosError> {
         .map_err(TezosError::Deserialize)
 }
 
-fn deserialize_bigint(s: String) -> Result<BigInt, TezosError> {
+fn parse_bigint(s: String) -> Result<BigInt, TezosError> {
     s.parse::<BigInt>().map_err(TezosError::DeserializeBigInt)
 }
 
@@ -146,7 +148,7 @@ fn counter(host: &Url, address: &str) -> Result<BigInt, TezosError> {
         .call()
         .into_json_deserialize()
         .map_err(TezosError::Deserialize)?;
-    deserialize_bigint(s)
+    parse_bigint(s)
 }
 
 #[derive(Debug)]
@@ -209,8 +211,6 @@ fn serialize_operation(host: &Url, op: &Operation) -> Result<String, TezosError>
 
     let payload = build_json(op);
 
-    println!("{}", payload);
-
     ureq::post(url.as_str())
         .send_json(payload)
         .into_json_deserialize()
@@ -223,9 +223,15 @@ struct DryRunResult {
     paid_storage_size_diff: BigInt,
 }
 
+fn from_value<T>(value: &Value) -> Result<T, TezosError>
+where
+    T: serde::de::DeserializeOwned,
+{
+    serde_json::value::from_value(value.clone()).map_err(TezosError::SerdeDeserialize)
+}
+
 fn deserialize_bigint_from_value(value: &Value) -> Result<BigInt, TezosError> {
-    let s = serde_json::value::from_value(value.clone()).map_err(TezosError::SerdeDeserialize)?;
-    deserialize_bigint(s)
+    from_value(value).and_then(parse_bigint)
 }
 
 fn dry_run_contract(
@@ -318,12 +324,139 @@ impl MizuOp {
     }
 }
 
+fn run_mizu_operation(
+    host: &Url,
+    parameters: &MizuOp,
+    source: &str,
+    destination: &str,
+    secret_key: &str,
+    debug: bool,
+) -> Result<String, TezosError> {
+    let parameters = parameters.to_expr();
+    let s = serde_json::to_string(&parameters).expect("serde should deserialize any MizuOp");
+    if debug {
+        eprintln!("{}", s);
+        eprintln!("{:?}", serde_json::from_str::<michelson::Expr>(&s));
+    }
+
+    let counter = counter(&host, &source)? + 1;
+
+    if debug {
+        eprintln!("counter: {}", counter);
+    }
+
+    let bootstrapped = bootstrapped(&host)?;
+
+    if debug {
+        eprintln!("bootstrapped: {:?}", bootstrapped);
+    }
+
+    let constants = constants(&host)?;
+
+    if debug {
+        eprintln!("constants: {:?}", constants);
+    }
+
+    let branch = head_hash(&host)?;
+
+    if debug {
+        eprintln!("head hash: {}", branch);
+    }
+
+    let chain_id = chain_id(&host)?;
+
+    if debug {
+        eprintln!("chain_id: {}", chain_id);
+    }
+
+    let mut op = Operation {
+        branch,
+        source: source.to_string(),
+        counter,
+        fee: Zero::zero(),
+        gas_limit: constants.hard_gas_limit_per_operation,
+        storage_limit: constants.hard_storage_limit_per_operation,
+        destination: destination.to_string(),
+        parameters,
+        protocol: None,
+        signature: None,
+    };
+
+    let sop = serialize_operation(&host, &op)?;
+
+    if debug {
+        eprintln!("serialized_operation: {}", &sop);
+    }
+
+    let (signature, _) =
+        crypto::sign_serialized_operation(&sop, &secret_key).map_err(TezosError::Crypto)?;
+
+    if debug {
+        eprintln!("signature: {}", signature);
+    }
+
+    op.signature = Some(signature);
+
+    let dry_run_result = dry_run_contract(&host, &op, &chain_id)?;
+
+    if debug {
+        eprintln!("consumed_gas: {}", dry_run_result.consumed_gas);
+        eprintln!(
+            "paid_storage_size_diff: {}",
+            dry_run_result.paid_storage_size_diff
+        );
+    }
+
+    op.gas_limit = dry_run_result.consumed_gas + 100;
+    op.storage_limit = dry_run_result.paid_storage_size_diff + 20;
+    op.signature = None;
+    // TODO: calculate fee here
+
+    let sop = serialize_operation(&host, &op)?;
+
+    if debug {
+        eprintln!("serialized_operation: {}", &sop);
+    }
+
+    let (signature, raw_signature) =
+        crypto::sign_serialized_operation(&sop, &secret_key).map_err(TezosError::Crypto)?;
+
+    if debug {
+        eprintln!("signature: {}", signature);
+    }
+
+    op.protocol = Some(PROTOCOL_CARTHAGE.to_string());
+    op.signature = Some(signature);
+
+    let preapply_result = preapply_operation(&host, &op)?;
+
+    if preapply_result[0].get("id").is_some() {
+        // some error occurred
+        eprintln!("preapply error: {}", preapply_result);
+
+        return Err(TezosError::Rpc(preapply_result));
+    }
+
+    if debug {
+        eprintln!("preapply_result: {}", preapply_result);
+    }
+
+    let signed_sop = [sop, hex::encode(raw_signature)].concat();
+    let hash = &inject_operation(&host, &signed_sop)?[0];
+
+    if debug {
+        eprintln!("operation hash: {}", hash);
+    }
+
+    from_value(hash)
+}
+
 fn main() -> Result<(), TezosError> {
     let node_host: Url =
         Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
-    let source = "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB".to_string();
-    let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk".to_string();
-    let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk".to_string();
+    let source = "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB";
+    let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
+    let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk";
 
     let parameters = MizuOp::Register(
         Some(vec![
@@ -332,93 +465,18 @@ fn main() -> Result<(), TezosError> {
         vec![
             0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe,
         ],
-    )
-    .to_expr();
-
-    let s = serde_json::to_string(&parameters).unwrap();
-    println!("{}", s);
-
-    println!("{:?}", serde_json::from_str::<michelson::Expr>(&s));
-
-    let counter = counter(&node_host, &source)? + 1;
-
-    let bootstrapped = bootstrapped(&node_host)?;
-
-    println!("bootstrapped: {:?}", bootstrapped);
-
-    let constants = constants(&node_host)?;
-
-    println!("constants: {:?}", constants);
-
-    let branch = head_hash(&node_host)?;
-
-    println!("head hash: {}", branch);
-
-    let chain_id = chain_id(&node_host)?;
-
-    println!("chain_id: {}", chain_id);
-
-    let mut op = Operation {
-        branch,
-        source,
-        counter,
-        fee: Zero::zero(),
-        gas_limit: constants.hard_gas_limit_per_operation,
-        storage_limit: constants.hard_storage_limit_per_operation,
-        destination,
-        parameters,
-        protocol: None,
-        signature: None,
-    };
-
-    let sop = serialize_operation(&node_host, &op)?;
-
-    println!("serialized_operation: {}", &sop);
-
-    let (signature, _) =
-        crypto::sign_serialized_operation(&sop, &secret_key).map_err(TezosError::Crypto)?;
-
-    println!("signature: {}", signature);
-
-    op.signature = Some(signature);
-
-    let dry_run_result = dry_run_contract(&node_host, &op, &chain_id)?;
-
-    println!("consumed_gas: {}", dry_run_result.consumed_gas);
-    println!(
-        "paid_storage_size_diff: {}",
-        dry_run_result.paid_storage_size_diff
     );
 
-    op.gas_limit = dry_run_result.consumed_gas + 100;
-    op.storage_limit = dry_run_result.paid_storage_size_diff;
-    op.signature = None;
+    let hash = run_mizu_operation(
+        &node_host,
+        &parameters,
+        source,
+        destination,
+        secret_key,
+        true,
+    )?;
 
-    let sop = serialize_operation(&node_host, &op)?;
-
-    println!("serialized_operation: {}", &sop);
-
-    let (signature, raw_signature) =
-        crypto::sign_serialized_operation(&sop, &secret_key).map_err(TezosError::Crypto)?;
-
-    println!("signature: {}", signature);
-
-    op.protocol = Some(PROTOCOL_CARTHAGE.to_string());
-    op.signature = Some(signature);
-
-    let preapply_result = preapply_operation(&node_host, &op)?;
-
-    if preapply_result[0].get("id").is_some() {
-        // some error occurred
-        println!("preapply error: {}", preapply_result);
-    } else {
-        println!("preapply_result: {}", preapply_result);
-
-        let signed_sop = [sop, hex::encode(raw_signature)].concat();
-        let inject_result = inject_operation(&node_host, &signed_sop)?;
-
-        println!("inject_result: {}", inject_result);
-    }
+    println!("hash: {}", hash);
 
     Ok(())
 }
