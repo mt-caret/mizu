@@ -110,7 +110,7 @@ fn list(user_data: &MizuConnection) -> Command {
     ])
 }
 
-fn generate<'a>(user_data: &'a MizuConnection) -> Command<'a> {
+fn generate(user_data: &MizuConnection) -> Command {
     use DriverError::*;
 
     subcommands(vec![(
@@ -169,7 +169,7 @@ fn register<'a>(
     ])
 }
 
-fn exist<'a>(tezos: &'a TezosMock) -> Command<'a> {
+fn exist(tezos: &TezosMock) -> Command {
     use DriverError::*;
 
     Box::new(move |input: &str| {
