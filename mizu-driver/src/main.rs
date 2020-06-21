@@ -128,11 +128,7 @@ fn generate(user_data: &MizuConnection) -> Command {
     )])
 }
 
-fn register<'a>(
-    address: &'a [u8],
-    tezos: &'a TezosMock,
-    user_data: &'a MizuConnection,
-) -> Command<'a> {
+fn register<'a>(tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<'a> {
     use DriverError::*;
 
     subcommands(vec![
@@ -145,11 +141,7 @@ fn register<'a>(
                 let identity_key = x3dh.identity_key.public_key;
                 let prekey = x3dh.prekey.public_key;
                 tezos
-                    .register(
-                        address,
-                        Some(identity_key.0.as_bytes()),
-                        prekey.0.as_bytes(),
-                    )
+                    .register(Some(identity_key.0.as_bytes()), prekey.0.as_bytes())
                     .map_err(Tezos)?;
                 println!("registered {}", identity_id);
 
@@ -169,7 +161,7 @@ fn register<'a>(
     ])
 }
 
-fn exist(tezos: &TezosMock) -> Command {
+fn exist<'a>(tezos: &'a TezosMock) -> Command<'a> {
     use DriverError::*;
 
     Box::new(move |input: &str| {
@@ -186,7 +178,7 @@ fn exist(tezos: &TezosMock) -> Command {
     })
 }
 
-fn post<'a>(address: &'a [u8], tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<'a> {
+fn post<'a>(tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<'a> {
     use DriverError::*;
 
     Box::new(move |input: &str| {
@@ -224,7 +216,7 @@ fn post<'a>(address: &'a [u8], tezos: &'a TezosMock, user_data: &'a MizuConnecti
                         .unwrap();
                     eprintln!("message = '{:?}'", message);
                     let payload = bincode::serialize(&message).unwrap();
-                    tezos.post(address, &[&payload], &[]).map_err(Tezos)?;
+                    tezos.post(&[&payload], &[]).map_err(Tezos)?;
                     user_data
                         .update_client(
                             our_identity_id,
@@ -237,13 +229,13 @@ fn post<'a>(address: &'a [u8], tezos: &'a TezosMock, user_data: &'a MizuConnecti
                 None => {
                     eprintln!("creating new Client");
                     let mut client =
-                        Client::with_x3dh_client(our_x3dh, address, &their_contact.address);
+                        Client::with_x3dh_client(our_x3dh, tezos.address(), &their_contact.address);
                     let message = client
                         .create_message(&mut rng, &identity_key, &prekey, message.as_bytes())
                         .unwrap();
                     eprintln!("message = '{:?}'", message);
                     let payload = bincode::serialize(&message).unwrap();
-                    tezos.post(address, &[&payload], &[]).map_err(Tezos)?;
+                    tezos.post(&[&payload], &[]).map_err(Tezos)?;
                     user_data
                         .create_client(our_identity_id, their_contact_id, &client, None)
                         .map_err(UserData)?;
@@ -257,7 +249,7 @@ fn post<'a>(address: &'a [u8], tezos: &'a TezosMock, user_data: &'a MizuConnecti
     })
 }
 
-fn get<'a>(address: &'a [u8], tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<'a> {
+fn get<'a>(tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<'a> {
     use DriverError::*;
 
     Box::new(move |input: &str| {
@@ -317,7 +309,7 @@ fn get<'a>(address: &'a [u8], tezos: &'a TezosMock, user_data: &'a MizuConnectio
                 None => {
                     eprintln!("creating new Client");
                     let mut client =
-                        Client::with_x3dh_client(our_x3dh, address, &their_contact.address);
+                        Client::with_x3dh_client(our_x3dh, tezos.address(), &their_contact.address);
                     let mut latest_message_timestamp = None;
                     for message in their_data.postal_box.iter() {
                         latest_message_timestamp = Some(message.timestamp);
@@ -348,27 +340,23 @@ fn get<'a>(address: &'a [u8], tezos: &'a TezosMock, user_data: &'a MizuConnectio
     })
 }
 
-fn commands<'a>(
-    address: &'a [u8],
-    tezos: &'a TezosMock,
-    user_data: &'a MizuConnection,
-) -> Command<'a> {
+fn commands<'a>(tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<'a> {
     subcommands(vec![
         ("list", list(user_data)),
         ("generate", generate(user_data)),
-        ("register", register(address, tezos, user_data)),
+        ("register", register(tezos, user_data)),
         ("exist", exist(tezos)),
-        ("post", post(address, tezos, user_data)),
-        ("get", get(address, tezos, user_data)),
+        ("post", post(tezos, user_data)),
+        ("get", get(tezos, user_data)),
     ])
 }
 
 fn main() {
-    let user_data = MizuConnection::connect(&std::env::var("MIZU_DB").unwrap()).unwrap();
-    let tezos = TezosMock::connect(&std::env::var("MIZU_TEZOS_MOCK").unwrap()).unwrap();
     let address = std::env::var("TEZOS_ADDRESS").unwrap();
     let address = address.as_bytes();
-    let commands = commands(address, &tezos, &user_data);
+    let user_data = MizuConnection::connect(&std::env::var("MIZU_DB").unwrap()).unwrap();
+    let tezos = TezosMock::connect(address, &std::env::var("MIZU_TEZOS_MOCK").unwrap()).unwrap();
+    let commands = commands(&tezos, &user_data);
 
     let mut rl = rustyline::Editor::<()>::new();
     while let Ok(line) = rl.readline("> ") {

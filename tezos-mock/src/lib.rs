@@ -13,21 +13,28 @@ mod user;
 
 type DieselError = diesel::result::Error;
 
-pub struct TezosMock {
+pub struct TezosMock<'a> {
+    /// Tezos address
+    address: &'a [u8],
     conn: SqliteConnection,
 }
 
-impl TezosMock {
-    pub fn connect(url: &str) -> ConnectionResult<Self> {
+impl<'a> TezosMock<'a> {
+    pub fn connect(address: &'a [u8], url: &str) -> ConnectionResult<Self> {
         Ok(TezosMock {
+            address,
             conn: SqliteConnection::establish(url)?,
         })
     }
 }
 
-impl Tezos for TezosMock {
+impl<'a> Tezos for TezosMock<'a> {
     type ReadError = DieselError;
     type WriteError = DieselError;
+
+    fn address(&self) -> &[u8] {
+        self.address
+    }
 
     fn retrieve_user_data(&self, address: &[u8]) -> Result<Option<UserData>, Self::ReadError> {
         // According to https://docs.diesel.rs/diesel/associations/index.html,
@@ -66,19 +73,14 @@ impl Tezos for TezosMock {
         }
     }
 
-    fn post(
-        &self,
-        sender_address: &[u8],
-        add: &[&[u8]],
-        remove: &[&usize],
-    ) -> Result<(), Self::WriteError> {
+    fn post(&self, add: &[&[u8]], remove: &[&usize]) -> Result<(), Self::WriteError> {
         use schema::messages::dsl as messages_dsl;
         use schema::users::dsl as users_dsl;
 
         // TODO: transaction?
         // First, retrieve all our posts to determine ones to be removed.
         let user = users_dsl::users
-            .filter(users_dsl::address.eq(sender_address))
+            .filter(users_dsl::address.eq(self.address))
             .first::<user::User>(&self.conn)?;
         let messages = message::Message::belonging_to(&user)
             .order(messages_dsl::id.asc())
@@ -124,12 +126,7 @@ impl Tezos for TezosMock {
         Ok(())
     }
 
-    fn register(
-        &self,
-        sender_address: &[u8],
-        identity_key: Option<&[u8]>,
-        prekey: &[u8],
-    ) -> Result<(), Self::WriteError> {
+    fn register(&self, identity_key: Option<&[u8]>, prekey: &[u8]) -> Result<(), Self::WriteError> {
         use schema::users::dsl;
 
         match identity_key {
@@ -139,11 +136,11 @@ impl Tezos for TezosMock {
                 eprintln!(
                     "{}",
                     diesel::debug_query::<diesel::sqlite::Sqlite, _>(
-                        &diesel::update(dsl::users.filter(dsl::address.eq(sender_address)))
+                        &diesel::update(dsl::users.filter(dsl::address.eq(self.address)))
                             .set(dsl::prekey.eq(prekey))
                     )
                 );
-                diesel::update(dsl::users.filter(dsl::address.eq(sender_address)))
+                diesel::update(dsl::users.filter(dsl::address.eq(self.address)))
                     .set(dsl::prekey.eq(prekey))
                     .execute(&self.conn)?
             }
@@ -152,7 +149,7 @@ impl Tezos for TezosMock {
                     "{}",
                     diesel::debug_query::<diesel::sqlite::Sqlite, _>(
                         &diesel::replace_into(dsl::users).values(&user::NewUser {
-                            address: sender_address,
+                            address: self.address,
                             identity_key,
                             prekey,
                         })
@@ -163,7 +160,7 @@ impl Tezos for TezosMock {
                 // - inserts a new row with the given keys if the address does not exist.
                 diesel::replace_into(dsl::users)
                     .values(&user::NewUser {
-                        address: sender_address,
+                        address: self.address,
                         identity_key,
                         prekey,
                     })
