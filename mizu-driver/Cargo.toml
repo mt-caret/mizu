@@ -15,4 +15,5 @@ bincode = "1.2.1"
 rustyline = "6.2.0"
 rand = "0.7.3"
 thiserror = "1.0.20"
-diesel = "1.4.5"
+diesel = { version = "1.4.5", features = ["chrono", "sqlite"] }
+chrono = "0.4.11"

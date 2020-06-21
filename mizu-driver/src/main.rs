@@ -17,7 +17,7 @@ type DieselError = diesel::result::Error;
 enum DriverError {
     #[error("failed to parse command: {0}")]
     ParseFail(String),
-    #[error("command not found")]
+    #[error("something not found")]
     NotFound,
     #[error("persistency layer: {0}")]
     UserData(DieselError),
@@ -26,10 +26,11 @@ enum DriverError {
 }
 
 fn uncons(input: &str) -> Option<(&str, &str)> {
-    let mut it = input.trim_start().splitn(2, " ");
-    let head = it.next()?;
-    let rest = it.next()?;
-    Some((head, rest))
+    let start = input.find(|c: char| !c.is_whitespace())?;
+    match input[start..].find(char::is_whitespace) {
+        Some(len) => Some((&input[start..start + len], &input[start + len..])),
+        None => Some((&input[start..], "")),
+    }
 }
 
 fn uncons_parse<'a, T: std::str::FromStr>(
@@ -195,6 +196,8 @@ fn post<'a>(address: &'a [u8], tezos: &'a TezosMock, user_data: &'a MizuConnecti
         let (their_contact_id, input) = uncons_parse(input, "failed to parse contact id")?;
         let (message, _input) = uncons(input).ok_or(NotFound)?;
 
+        eprintln!("{}\t{}\t{}", our_identity_id, their_contact_id, message);
+
         let our_identity = user_data.find_identity(our_identity_id).map_err(UserData)?;
         let our_x3dh: X3DHClient = bincode::deserialize(&our_identity.x3dh_client).unwrap();
 
@@ -214,14 +217,21 @@ fn post<'a>(address: &'a [u8], tezos: &'a TezosMock, user_data: &'a MizuConnecti
             {
                 Some(client) => {
                     eprintln!("using existing Client");
+                    let latest_message_timestamp = client.latest_message_timestamp;
                     let mut client: Client = bincode::deserialize(&client.client_data).unwrap();
                     let message = client
                         .create_message(&mut rng, &identity_key, &prekey, message.as_bytes())
                         .unwrap();
+                    eprintln!("message = '{:?}'", message);
                     let payload = bincode::serialize(&message).unwrap();
                     tezos.post(address, &[&payload], &[]).map_err(Tezos)?;
                     user_data
-                        .update_client(our_identity_id, their_contact_id, &client)
+                        .update_client(
+                            our_identity_id,
+                            their_contact_id,
+                            &client,
+                            latest_message_timestamp.as_ref(),
+                        )
                         .map_err(UserData)?;
                 }
                 None => {
@@ -231,10 +241,11 @@ fn post<'a>(address: &'a [u8], tezos: &'a TezosMock, user_data: &'a MizuConnecti
                     let message = client
                         .create_message(&mut rng, &identity_key, &prekey, message.as_bytes())
                         .unwrap();
+                    eprintln!("message = '{:?}'", message);
                     let payload = bincode::serialize(&message).unwrap();
                     tezos.post(address, &[&payload], &[]).map_err(Tezos)?;
                     user_data
-                        .create_client(our_identity_id, their_contact_id, &client)
+                        .create_client(our_identity_id, their_contact_id, &client, None)
                         .map_err(UserData)?;
                 }
             }
@@ -269,33 +280,53 @@ fn get<'a>(address: &'a [u8], tezos: &'a TezosMock, user_data: &'a MizuConnectio
             {
                 Some(client) => {
                     eprintln!("using existing Client");
+                    let mut latest_message_timestamp = client.latest_message_timestamp;
                     let mut client: Client = bincode::deserialize(&client.client_data).unwrap();
-                    for message in their_data.postal_box.into_iter() {
+                    for message in their_data.postal_box.iter() {
+                        let timestamp = message.timestamp;
                         let message = bincode::deserialize(&message.content).unwrap();
                         if let Ok(message) = client.attempt_message_decryption(&mut rng, message) {
                             user_data
                                 .create_message(our_identity_id, their_contact_id, &message)
                                 .map_err(UserData)?;
+                            // assuming message is ordered
+                            latest_message_timestamp = Some(timestamp);
+                            println!("received {:?}", message);
                         }
                     }
                     user_data
-                        .update_client(our_identity_id, their_contact_id, &client)
+                        .update_client(
+                            our_identity_id,
+                            their_contact_id,
+                            &client,
+                            latest_message_timestamp.as_ref(),
+                        )
                         .map_err(UserData)?;
                 }
                 None => {
                     eprintln!("creating new Client");
                     let mut client =
                         Client::with_x3dh_client(our_x3dh, address, &their_contact.address);
-                    for message in their_data.postal_box.into_iter() {
+                    let mut latest_message_timestamp = None;
+                    for message in their_data.postal_box.iter() {
+                        let timestamp = message.timestamp;
                         let message = bincode::deserialize(&message.content).unwrap();
                         if let Ok(message) = client.attempt_message_decryption(&mut rng, message) {
                             user_data
                                 .create_message(our_identity_id, their_contact_id, &message)
                                 .map_err(UserData)?;
+                            // assuming message is ordered
+                            latest_message_timestamp = Some(timestamp);
+                            println!("received {:?}", message);
                         }
                     }
                     user_data
-                        .create_client(our_identity_id, their_contact_id, &client)
+                        .create_client(
+                            our_identity_id,
+                            their_contact_id,
+                            &client,
+                            latest_message_timestamp.as_ref(),
+                        )
                         .map_err(UserData)?;
                 }
             }
