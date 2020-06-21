@@ -98,6 +98,7 @@ impl Tezos for TezosMock {
                 content,
             })
             .collect();
+
         diesel::insert_into(schema::messages::table)
             .values(&new_messages)
             .execute(&self.conn)?;

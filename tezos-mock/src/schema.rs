@@ -3,7 +3,7 @@ table! {
         id -> Integer,
         user_id -> Integer,
         content -> Binary,
-        timestamp -> Text,
+        timestamp -> Timestamp,
     }
 }
 

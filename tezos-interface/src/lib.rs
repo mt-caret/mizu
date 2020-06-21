@@ -1,7 +1,9 @@
+use chrono::naive::NaiveDateTime;
+
 #[derive(Debug)]
 pub struct Message {
     pub content: Vec<u8>,
-    pub timestamp: String,
+    pub timestamp: NaiveDateTime,
 }
 
 #[derive(Debug)]

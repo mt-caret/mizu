@@ -1,3 +1,5 @@
+use chrono::NaiveDateTime;
+
 use crate::schema::messages;
 use crate::user::User;
 
@@ -8,7 +10,7 @@ pub struct Message {
     pub id: i32,
     pub user_id: i32,
     pub content: Vec<u8>,
-    pub timestamp: String,
+    pub timestamp: NaiveDateTime,
 }
 
 #[derive(Insertable)]
