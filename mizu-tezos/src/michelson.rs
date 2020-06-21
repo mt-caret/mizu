@@ -84,10 +84,16 @@ impl Serialize for Expr {
                 seq.end()
             }
             Expr::Prim { prim, args } => {
-                let mut state = serializer.serialize_struct("Expr", 2)?;
-                state.serialize_field("prim", prim)?;
-                state.serialize_field("args", args)?;
-                state.end()
+                if args.len() == 0 {
+                    let mut state = serializer.serialize_struct("Expr", 1)?;
+                    state.serialize_field("prim", prim)?;
+                    state.end()
+                } else {
+                    let mut state = serializer.serialize_struct("Expr", 2)?;
+                    state.serialize_field("prim", prim)?;
+                    state.serialize_field("args", args)?;
+                    state.end()
+                }
             }
         }
     }
@@ -105,10 +111,10 @@ impl<'de> Visitor<'de> for ExprVisitor {
     where
         A: MapAccess<'de>,
     {
-        let key = value
+        let key: String = value
             .next_key()?
             .ok_or_else(|| de::Error::custom("no key found"))?;
-        match key {
+        match &key[..] {
             "int" => value.next_value().map(Expr::Int),
             "string" => value.next_value().map(Expr::String),
             "bytes" => {
@@ -124,14 +130,28 @@ impl<'de> Visitor<'de> for ExprVisitor {
                 })?;
                 Ok(Expr::Bytes(bytes))
             }
-            // TODO: is it possible that we may get "args" first?
+            "args" => {
+                let args = value.next_value()?;
+                let key: String = value
+                    .next_key()?
+                    .ok_or_else(|| de::Error::custom("expecting \"prim\" key"))?;
+                if key == "prim" {
+                    let prim = value.next_value()?;
+                    Ok(Expr::Prim { prim, args })
+                } else {
+                    Err(de::Error::custom(format!(
+                        "expecting \"prim\" but found \"{}\"",
+                        key
+                    )))
+                }
+            }
             "prim" => {
                 let prim = value.next_value()?;
                 let key: String = value
                     .next_key()?
                     .ok_or_else(|| de::Error::custom("expecting \"args\" key"))?;
                 if key == "args" {
-                    let args: Vec<Expr> = value.next_value()?;
+                    let args = value.next_value()?;
                     Ok(Expr::Prim { prim, args })
                 } else {
                     Err(de::Error::custom(format!(

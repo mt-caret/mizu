@@ -304,6 +304,33 @@ fn inject_operation(host: &Url, signed_sop: &str) -> Result<Value> {
         .and_then(|x| from_value(&x))
 }
 
+fn get_from_big_map(host: &Url, contract_address: &str, key: &str) -> Result<Expr> {
+    let url = host
+        .join(
+            &[
+                "chains/main/blocks/head/context/contracts/",
+                contract_address,
+                "/big_map_get",
+            ]
+            .concat(),
+        )
+        .map_err(TezosError::UrlParse)?;
+
+    let payload = serde_json::json!(
+    { "key": Expr::String(key.to_string())
+    , "type": Expr::Prim {
+            prim: "address".to_string(),
+            args: Vec::new()
+        }
+    });
+
+    ureq::post(url.as_str())
+        .send_json(payload)
+        .into_json()
+        .map_err(TezosError::IO)
+        .and_then(|x| from_value(&x))
+}
+
 // TODO: test remaining enums
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -494,6 +521,10 @@ fn main() -> Result<()> {
     )?;
 
     println!("hash: {}", hash);
+
+    let user_data = get_from_big_map(&node_host, destination, source)?;
+
+    println!("user_data: {:?}", user_data);
 
     Ok(())
 }
