@@ -463,6 +463,12 @@ fn run_mizu_operation(
 }
 
 fn main() -> Result<()> {
+    //let address = crypto::derive_address_from_pubkey(
+    //    "edpkuwY2nMXEdzhKd9PxsBfX4ZxZ78w2yoTbEN6yfq5HCGx1MnxDdj",
+    //)
+    //.map_err(TezosError::Crypto)?;
+    //assert_eq!(address, "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB");
+
     let node_host: Url =
         Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
     let source = "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB";

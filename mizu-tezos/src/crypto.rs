@@ -24,6 +24,27 @@ fn base58check_decode(input: &str) -> Result<Vec<u8>, Error> {
     Ok([vec![head], rest].concat())
 }
 
+fn base58check_encode(input: &[u8]) -> String {
+    input[1..].to_base58check(input[0])
+}
+
+// TODO: test this when turning this into a library later
+#[allow(dead_code)]
+pub fn derive_address_from_pubkey(public_key: &str) -> Result<String, Error> {
+    if &public_key[0..4] != "edpk" {
+        return Err(Error::KeyType);
+    }
+    let public_key = &base58check_decode(public_key)?[4..];
+
+    let mut hasher = VarBlake2b::new(20).expect("20 byte output should be valid for blake2b");
+    hasher.update(public_key);
+    let hash = hasher.finalize_boxed();
+
+    Ok(base58check_encode(
+        &[vec![6, 161, 159], hash.to_vec()].concat(),
+    ))
+}
+
 // Based on https://www.ocamlpro.com/2018/11/21/an-introduction-to-tezos-rpcs-signing-operations/
 pub fn sign_serialized_operation(
     serialized_operation: &str,
@@ -50,9 +71,7 @@ pub fn sign_serialized_operation(
         .to_bytes();
 
     Ok((
-        [vec![0xf5, 0xcd, 0x86, 0x12], signature.to_vec()]
-            .concat()
-            .to_base58check(0x09),
+        base58check_encode(&[vec![0x09, 0xf5, 0xcd, 0x86, 0x12], signature.to_vec()].concat()),
         signature.to_vec(),
     ))
 }
