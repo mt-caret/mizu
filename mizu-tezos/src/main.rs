@@ -29,13 +29,15 @@ enum TezosError {
     Rpc(Value),
 }
 
+type Result<T> = std::result::Result<T, TezosError>;
+
 #[derive(Deserialize, Debug)]
 struct Bootstrapped {
     block: String,
     timestamp: String,
 }
 
-fn bootstrapped(host: &Url) -> Result<Bootstrapped, TezosError> {
+fn bootstrapped(host: &Url) -> Result<Bootstrapped> {
     let url = host
         .join("monitor/bootstrapped")
         .map_err(TezosError::UrlParse)?;
@@ -96,7 +98,7 @@ struct Constants {
     delay_per_missing_endorsement: i64,
 }
 
-fn constants(host: &Url) -> Result<Constants, TezosError> {
+fn constants(host: &Url) -> Result<Constants> {
     let url = host
         .join("chains/main/blocks/head/context/constants")
         .map_err(TezosError::UrlParse)?;
@@ -108,7 +110,7 @@ fn constants(host: &Url) -> Result<Constants, TezosError> {
         .and_then(|x| from_value(&x))
 }
 
-fn head_hash(host: &Url) -> Result<String, TezosError> {
+fn head_hash(host: &Url) -> Result<String> {
     let url = host
         .join("chains/main/blocks/head/hash")
         .map_err(TezosError::UrlParse)?;
@@ -120,7 +122,7 @@ fn head_hash(host: &Url) -> Result<String, TezosError> {
         .and_then(|x| from_value(&x))
 }
 
-fn chain_id(host: &Url) -> Result<String, TezosError> {
+fn chain_id(host: &Url) -> Result<String> {
     let url = host
         .join("chains/main/chain_id")
         .map_err(TezosError::UrlParse)?;
@@ -132,11 +134,11 @@ fn chain_id(host: &Url) -> Result<String, TezosError> {
         .and_then(|x| from_value(&x))
 }
 
-fn parse_bigint(s: String) -> Result<BigInt, TezosError> {
+fn parse_bigint(s: String) -> Result<BigInt> {
     s.parse::<BigInt>().map_err(TezosError::DeserializeBigInt)
 }
 
-fn counter(host: &Url, address: &str) -> Result<BigInt, TezosError> {
+fn counter(host: &Url, address: &str) -> Result<BigInt> {
     let url = host
         .join(
             &[
@@ -209,7 +211,7 @@ fn build_json(op: &Operation) -> Value {
     value
 }
 
-fn serialize_operation(host: &Url, op: &Operation) -> Result<String, TezosError> {
+fn serialize_operation(host: &Url, op: &Operation) -> Result<String> {
     let url = host
         .join("chains/main/blocks/head/helpers/forge/operations")
         .map_err(TezosError::UrlParse)?;
@@ -229,7 +231,7 @@ struct DryRunResult {
     paid_storage_size_diff: BigInt,
 }
 
-fn from_value<T>(value: &Value) -> Result<T, TezosError>
+fn from_value<T>(value: &Value) -> Result<T>
 where
     T: serde::de::DeserializeOwned,
 {
@@ -237,15 +239,11 @@ where
         .map_err(|e| TezosError::SerdeDeserialize(e, value.clone()))
 }
 
-fn deserialize_bigint_from_value(value: &Value) -> Result<BigInt, TezosError> {
+fn deserialize_bigint_from_value(value: &Value) -> Result<BigInt> {
     from_value(value).and_then(parse_bigint)
 }
 
-fn dry_run_contract(
-    host: &Url,
-    op: &Operation,
-    chain_id: &str,
-) -> Result<DryRunResult, TezosError> {
+fn dry_run_contract(host: &Url, op: &Operation, chain_id: &str) -> Result<DryRunResult> {
     let url = host
         .join("chains/main/blocks/head/helpers/scripts/run_operation")
         .map_err(TezosError::UrlParse)?;
@@ -278,7 +276,7 @@ fn dry_run_contract(
     })
 }
 
-fn preapply_operation(host: &Url, op: &Operation) -> Result<Value, TezosError> {
+fn preapply_operation(host: &Url, op: &Operation) -> Result<Value> {
     let url = host
         .join("chains/main/blocks/head/helpers/preapply/operations")
         .map_err(TezosError::UrlParse)?;
@@ -292,7 +290,7 @@ fn preapply_operation(host: &Url, op: &Operation) -> Result<Value, TezosError> {
         .and_then(|x| from_value(&x))
 }
 
-fn inject_operation(host: &Url, signed_sop: &str) -> Result<Value, TezosError> {
+fn inject_operation(host: &Url, signed_sop: &str) -> Result<Value> {
     let url = host
         .join("injection/operation?chain=main")
         .map_err(TezosError::UrlParse)?;
@@ -334,6 +332,9 @@ impl MizuOp {
     }
 }
 
+// Code here was written based on the following sources:
+// - https://www.ocamlpro.com/2018/11/15/an-introduction-to-tezos-rpcs-a-basic-wallet/
+// - https://medium.com/chain-accelerator/how-to-use-tezos-rpcs-16c362f45d64
 fn run_mizu_operation(
     host: &Url,
     parameters: &MizuOp,
@@ -341,7 +342,7 @@ fn run_mizu_operation(
     destination: &str,
     secret_key: &str,
     debug: bool,
-) -> Result<String, TezosError> {
+) -> Result<String> {
     let parameters = parameters.to_expr();
     let s = serde_json::to_string(&parameters).expect("serde should deserialize any MizuOp");
     if debug {
@@ -461,7 +462,7 @@ fn run_mizu_operation(
     from_value(hash)
 }
 
-fn main() -> Result<(), TezosError> {
+fn main() -> Result<()> {
     let node_host: Url =
         Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
     let source = "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB";
