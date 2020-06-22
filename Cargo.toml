@@ -3,4 +3,5 @@
 members = [
     "mizu-crypto",
     "mizu-sqlite",
+    "mizu-tezos",
 ]

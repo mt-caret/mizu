@@ -17,6 +17,7 @@ this for anything real.
 
 - [threat model](./threat_model.md)
 - [technical details](./technical_details.md)
+- [build instructions](./build_instructions.md)
 
 ## why not [Signal](https://signal.org/)?
 
