@@ -3,7 +3,7 @@
 members = [
     "mizu-crypto",
     "mizu-sqlite",
-    "tezos-interface",
-    "tezos-mock",
+    "mizu-tezos-interface",
+    "mizu-tezos-mock",
     "mizu-driver",
 ]

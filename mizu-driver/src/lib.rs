@@ -5,10 +5,10 @@ use mizu_crypto::x3dh::X3DHClient;
 use mizu_crypto::Client;
 use mizu_sqlite::MizuConnection;
 use mizu_sqlite::{contact::Contact, identity::Identity, message::Message};
+use mizu_tezos_interface::Tezos;
 use rand::{CryptoRng, RngCore};
 use std::convert::TryInto;
 use std::fmt::{Debug, Display};
-use tezos_interface::Tezos;
 use thiserror::Error;
 
 type DieselError = diesel::result::Error;
@@ -48,7 +48,7 @@ struct ClientAndTimestamp {
 struct TezosData {
     identity_key: IdentityPublicKey,
     prekey: PrekeyPublicKey,
-    postal_box: Vec<tezos_interface::Message>,
+    postal_box: Vec<mizu_tezos_interface::Message>,
     pokes: Vec<Vec<u8>>,
 }
 
@@ -115,7 +115,10 @@ where
             .map_err(DriverError::UserData)
     }
 
-    pub fn find_user(&self, address: &str) -> DriverResult<T, Option<tezos_interface::UserData>> {
+    pub fn find_user(
+        &self,
+        address: &str,
+    ) -> DriverResult<T, Option<mizu_tezos_interface::UserData>> {
         self.tezos
             .retrieve_user_data(address)
             .map_err(DriverError::TezosRead)
@@ -331,8 +334,8 @@ mod test {
     use super::*;
     use diesel::{connection::SimpleConnection, prelude::*};
     use mizu_sqlite::MizuConnection;
+    use mizu_tezos_mock::TezosMock;
     use rand::rngs::OsRng;
-    use tezos_mock::TezosMock;
 
     fn prepare_user_database() -> MizuConnection {
         // Create an in-memory SQLite database
@@ -354,7 +357,7 @@ mod test {
             // Create an in-memory SQLite database
             let conn = SqliteConnection::establish(":memory:").unwrap();
             let migration =
-                include_str!("../../tezos-mock/migrations/2020-06-17-013029_initial/up.sql");
+                include_str!("../../mizu-tezos-mock/migrations/2020-06-17-013029_initial/up.sql");
             conn.batch_execute(migration).unwrap();
             conn
         };

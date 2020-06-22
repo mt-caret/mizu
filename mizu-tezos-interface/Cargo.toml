@@ -1,5 +1,5 @@
 [package]
-name = "tezos-mock"
+name = "mizu-tezos-interface"
 version = "0.1.0"
 authors = ["pandaman64 <kointosudesuyo@infoseek.jp>"]
 edition = "2018"
@@ -7,6 +7,4 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-diesel = { version = "1.4.5", features = ["chrono", "sqlite"] }
-tezos-interface = { path = "../tezos-interface" }
 chrono = "0.4.11"

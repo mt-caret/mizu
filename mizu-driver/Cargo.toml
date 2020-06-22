@@ -9,8 +9,8 @@ edition = "2018"
 [dependencies]
 mizu-crypto = { path = "../mizu-crypto" }
 mizu-sqlite = { path = "../mizu-sqlite" }
-tezos-mock = { path = "../tezos-mock" }
-tezos-interface = { path = "../tezos-interface" }
+mizu-tezos-mock = { path = "../mizu-tezos-mock" }
+mizu-tezos-interface = { path = "../mizu-tezos-interface" }
 bincode = "1.2.1"
 rustyline = "6.2.0"
 rand = "0.7.3"

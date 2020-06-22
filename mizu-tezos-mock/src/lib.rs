@@ -4,7 +4,7 @@
 extern crate diesel;
 
 use diesel::prelude::*;
-use tezos_interface::*;
+use mizu_tezos_interface::*;
 
 mod message;
 mod poke;

@@ -4,9 +4,9 @@
 use diesel::prelude::*;
 use mizu_driver::*;
 use mizu_sqlite::MizuConnection;
+use mizu_tezos_interface::Tezos;
+use mizu_tezos_mock::TezosMock;
 use rand::rngs::OsRng;
-use tezos_interface::Tezos;
-use tezos_mock::TezosMock;
 
 fn uncons(input: &str) -> Option<(&str, &str)> {
     let start = input.find(|c: char| !c.is_whitespace())?;
