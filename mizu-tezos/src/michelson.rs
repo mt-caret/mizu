@@ -84,7 +84,7 @@ impl Serialize for Expr {
                 seq.end()
             }
             Expr::Prim { prim, args } => {
-                if args.len() == 0 {
+                if args.is_empty() {
                     let mut state = serializer.serialize_struct("Expr", 1)?;
                     state.serialize_field("prim", prim)?;
                     state.end()

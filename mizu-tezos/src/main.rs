@@ -376,7 +376,7 @@ fn serialize_and_set_fee(host: &Url, op: &mut Operation, debug: bool) -> Result<
     let minimal_nanotez_per_byte = 1000;
 
     let total_fee = (minimal_fees * 1000
-        + minimal_nanotez_per_byte * op_byte_length.clone()
+        + minimal_nanotez_per_byte * op_byte_length
         + minimal_nanotez_per_gas_unit * op.gas_limit.clone())
         / 1000;
 
