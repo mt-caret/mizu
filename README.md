@@ -24,7 +24,7 @@ Signal is a messaging application for smartphones which provides
 various desireable properties (end-to-end encryption, forward and future
 secrecy, deniability) with respect to security.
 
-While I agree Signal should be your first choice when looking for a secure
+While we agree Signal should be your first choice when looking for a secure
 messenger, it has different design goals from Mizu.
 
 - Signal requires a smartphone and a phone number
@@ -36,7 +36,7 @@ one of the goals of Signal.
 
 - [Signal is centralized and the server is closed source](https://signal.org/blog/the-ecosystem-is-moving/)
 
-While I think the reasons behind this decision are valid, I believe there are
+While we think the reasons behind this decision are valid, we believe there are
 very legitimate use cases in which this makes using Signal unviable.
 
 ## why not Pond?
@@ -102,3 +102,7 @@ messages heavily discourages spam.
 - [ ] document the differences between X3DH + Double Ratchet
 - [ ] add a way to remove pokes
 - [ ] possibly use constant-time primitives available here: https://github.com/dalek-cryptography/subtle
+
+## Acknowledgements
+
+Thanks to Shiho Midorikawa from Cybozu Labs for helpful suggestions and discussion.
