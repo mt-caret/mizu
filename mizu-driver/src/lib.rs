@@ -61,8 +61,6 @@ pub struct Driver<T> {
 impl<T> Driver<T>
 where
     T: Tezos,
-    T::ReadError: Debug + Display,
-    T::WriteError: Debug + Display,
 {
     pub fn new(conn: MizuConnection, tezos: T) -> Self {
         Self { conn, tezos }

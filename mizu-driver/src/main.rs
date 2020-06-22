@@ -1,33 +1,12 @@
 //! TODO: all deserialization shouldn't unwrap
 //! TODO: consider error conditions of encryption
-//! TODO: refactor out common logic
 
-use mizu_crypto::{
-    keys::{IdentityPublicKey, PrekeyPublicKey},
-    x3dh::X3DHClient,
-    Client,
-};
+use diesel::prelude::*;
+use mizu_driver::*;
 use mizu_sqlite::MizuConnection;
 use rand::rngs::OsRng;
 use tezos_interface::Tezos;
 use tezos_mock::TezosMock;
-use thiserror::Error;
-
-use std::convert::TryInto;
-
-type DieselError = diesel::result::Error;
-
-#[derive(Debug, Error)]
-enum DriverError {
-    #[error("failed to parse command: {0}")]
-    ParseFail(String),
-    #[error("something not found")]
-    NotFound,
-    #[error("persistency layer: {0}")]
-    UserData(DieselError),
-    #[error("Tezos: {0}")]
-    Tezos(DieselError),
-}
 
 fn uncons(input: &str) -> Option<(&str, &str)> {
     let start = input.find(|c: char| !c.is_whitespace())?;
@@ -37,10 +16,11 @@ fn uncons(input: &str) -> Option<(&str, &str)> {
     }
 }
 
-fn uncons_parse<'a, T: std::str::FromStr>(
-    input: &'a str,
-    message: &str,
-) -> Result<(T, &'a str), DriverError> {
+fn uncons_parse<'a, T, H>(input: &'a str, message: &'static str) -> DriverResult<T, (H, &'a str)>
+where
+    T: Tezos,
+    H: std::str::FromStr,
+{
     use DriverError::*;
 
     let (head, rest) = uncons(input).ok_or_else(|| NotFound)?;
@@ -48,10 +28,13 @@ fn uncons_parse<'a, T: std::str::FromStr>(
     Ok((head, rest))
 }
 
-type Command<'a> = Box<dyn Fn(&str) -> Result<(), DriverError> + 'a>;
+type Command<'a, T> = Box<dyn Fn(&str) -> DriverResult<T, ()> + 'a>;
 
-fn subcommands<'a, I: IntoIterator<Item = (&'a str, Command<'a>)>>(subcommands: I) -> Command<'a> {
-    let subcommands: Vec<_> = subcommands.into_iter().collect();
+fn subcommands<'a, T: Tezos>(subcommands: Vec<(&'a str, Command<'a, T>)>) -> Command<'a, T>
+where
+    T::ReadError: 'a,
+    T::WriteError: 'a,
+{
     Box::new(move |input| {
         if let Some((head, rest)) = uncons(input) {
             for (key, f) in subcommands.iter() {
@@ -65,24 +48,22 @@ fn subcommands<'a, I: IntoIterator<Item = (&'a str, Command<'a>)>>(subcommands: 
     })
 }
 
-fn list(user_data: &MizuConnection) -> Command {
-    use DriverError::*;
-
-    subcommands(vec![
+fn list<T: Tezos>(driver: &Driver<T>) -> Command<T> {
+    subcommands::<T>(vec![
         (
             "identity",
             Box::new(move |_input: &str| {
-                for id in user_data.list_identities().map_err(UserData)? {
+                for id in driver.list_identities()? {
                     println!("{}\t{}\t{}", id.id, id.name, id.created_at);
                 }
 
                 Ok(())
-            }) as Command,
+            }) as Command<T>,
         ),
         (
             "contact",
             Box::new(move |_input: &str| {
-                for contact in user_data.list_contacts().map_err(UserData)? {
+                for contact in driver.list_contacts()? {
                     println!("{}\t{}\t{}", contact.id, contact.name, contact.created_at);
                 }
 
@@ -92,12 +73,11 @@ fn list(user_data: &MizuConnection) -> Command {
         (
             "message",
             Box::new(move |input: &str| {
-                let (our_identity_id, input) = uncons_parse(input, "failed to parse identity id")?;
-                let (their_contact_id, _input) = uncons_parse(input, "failed to parse contact id")?;
-                for message in user_data
-                    .find_messages(our_identity_id, their_contact_id)
-                    .map_err(UserData)?
-                {
+                let (our_identity_id, input) =
+                    uncons_parse::<T, _>(input, "failed to parse identity id")?;
+                let (their_contact_id, _input) =
+                    uncons_parse::<T, _>(input, "failed to parse contact id")?;
+                for message in driver.list_messages(our_identity_id, their_contact_id)? {
                     println!(
                         "{}\t{}\t{}\t{}\t{}",
                         message.id,
@@ -114,61 +94,55 @@ fn list(user_data: &MizuConnection) -> Command {
     ])
 }
 
-fn generate(user_data: &MizuConnection) -> Command {
+fn generate<T: Tezos>(driver: &Driver<T>) -> Command<T> {
     use DriverError::*;
 
-    subcommands(vec![(
+    subcommands::<T>(vec![(
         "identity",
         Box::new(move |input: &str| {
             let mut rng = OsRng;
 
             let (name, _) = uncons(input).ok_or_else(|| NotFound)?;
-            let x3dh = X3DHClient::new(&mut rng);
-            user_data.create_identity(name, &x3dh).map_err(UserData)?;
+            driver.generate_identity(&mut rng, name)?;
             println!("generated X3DHClient as {}", name);
 
             Ok(())
-        }) as Command,
+        }) as Command<T>,
     )])
 }
 
-fn register<'a>(tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<'a> {
-    use DriverError::*;
+fn publish<T: Tezos>(driver: &Driver<T>) -> Command<T> {
+    subcommands::<T>(vec![(
+        "identity",
+        Box::new(move |input: &str| {
+            let (identity_id, _input) = uncons_parse::<T, _>(input, "failed to parse identity id")?;
+            driver.publish_identity(identity_id)?;
+            println!("registered {}", identity_id);
 
-    subcommands(vec![
-        (
-            "identity",
-            Box::new(move |input: &str| {
-                let (identity_id, _input) = uncons_parse(input, "failed to parse identity id")?;
-                let identity = user_data.find_identity(identity_id).map_err(UserData)?;
-                let x3dh: X3DHClient = bincode::deserialize(&identity.x3dh_client).unwrap();
-                let identity_key = x3dh.identity_key.public_key;
-                let prekey = x3dh.prekey.public_key;
-                tezos
-                    .register(Some(identity_key.0.as_bytes()), prekey.0.as_bytes())
-                    .map_err(Tezos)?;
-                println!("registered {}", identity_id);
-
-                Ok(())
-            }) as Command,
-        ),
-        (
-            "contact",
-            Box::new(move |input: &str| {
-                let (name, rest) = uncons(input).ok_or(NotFound)?;
-                let (address, _rest) = uncons(rest).ok_or(NotFound)?;
-                user_data.create_contact(name, address).map_err(UserData)
-            }),
-        ),
-    ])
+            Ok(())
+        }) as Command<T>,
+    )])
 }
 
-fn exist<'a>(tezos: &'a TezosMock) -> Command<'a> {
+fn add<T: Tezos>(driver: &Driver<T>) -> Command<T> {
+    use DriverError::*;
+
+    subcommands::<T>(vec![(
+        "contact",
+        Box::new(move |input: &str| {
+            let (name, rest) = uncons(input).ok_or(NotFound)?;
+            let (address, _rest) = uncons(rest).ok_or(NotFound)?;
+            driver.add_contact(name, address)
+        }) as Command<T>,
+    )])
+}
+
+fn exist_user<T: Tezos>(driver: &Driver<T>) -> Command<T> {
     use DriverError::*;
 
     Box::new(move |input: &str| {
         let (address, _rest) = uncons(input).ok_or(NotFound)?;
-        match tezos.retrieve_user_data(address).map_err(Tezos)? {
+        match driver.find_user(address)? {
             Some(_) => println!("{} exists", address),
             None => println!("{} doesn't exist", address),
         }
@@ -177,194 +151,56 @@ fn exist<'a>(tezos: &'a TezosMock) -> Command<'a> {
     })
 }
 
-fn post<'a>(tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<'a> {
+fn post_message<T: Tezos>(driver: &Driver<T>) -> Command<T> {
     use DriverError::*;
 
     Box::new(move |input: &str| {
         let mut rng = OsRng;
 
-        let (our_identity_id, input) = uncons_parse(input, "failed to parse identity id")?;
-        let (their_contact_id, input) = uncons_parse(input, "failed to parse contact id")?;
+        let (our_identity_id, input) = uncons_parse::<T, _>(input, "failed to parse identity id")?;
+        let (their_contact_id, input) = uncons_parse::<T, _>(input, "failed to parse contact id")?;
         let (message, _input) = uncons(input).ok_or(NotFound)?;
 
         eprintln!("{}\t{}\t{}", our_identity_id, their_contact_id, message);
-
-        let our_identity = user_data.find_identity(our_identity_id).map_err(UserData)?;
-        let our_x3dh: X3DHClient = bincode::deserialize(&our_identity.x3dh_client).unwrap();
-
-        let their_contact = user_data.find_contact(their_contact_id).map_err(UserData)?;
-
-        if let Some(their_data) = tezos
-            .retrieve_user_data(&their_contact.address)
-            .map_err(Tezos)?
-        {
-            let identity_key: [u8; 32] = their_data.identity_key.as_slice().try_into().unwrap();
-            let identity_key = IdentityPublicKey(identity_key.into());
-            let prekey: [u8; 32] = their_data.prekey.as_slice().try_into().unwrap();
-            let prekey = PrekeyPublicKey(prekey.into());
-            match user_data
-                .find_client(our_identity_id, their_contact_id)
-                .map_err(UserData)?
-            {
-                Some(client) => {
-                    eprintln!("using existing Client");
-                    let latest_message_timestamp = client.latest_message_timestamp;
-                    let mut client: Client = bincode::deserialize(&client.client_data).unwrap();
-                    let message = client
-                        .create_message(&mut rng, &identity_key, &prekey, message.as_bytes())
-                        .unwrap();
-                    eprintln!("message = '{:?}'", message);
-                    let payload = bincode::serialize(&message).unwrap();
-                    tezos.post(&[&payload], &[]).map_err(Tezos)?;
-                    user_data
-                        .update_client(
-                            our_identity_id,
-                            their_contact_id,
-                            &client,
-                            latest_message_timestamp.as_ref(),
-                        )
-                        .map_err(UserData)?;
-                }
-                None => {
-                    eprintln!("creating new Client");
-                    let mut client = Client::with_x3dh_client(
-                        our_x3dh,
-                        tezos.address().as_bytes(),
-                        their_contact.address.as_bytes(),
-                    );
-                    let message = client
-                        .create_message(&mut rng, &identity_key, &prekey, message.as_bytes())
-                        .unwrap();
-                    eprintln!("message = '{:?}'", message);
-                    let payload = bincode::serialize(&message).unwrap();
-                    tezos.post(&[&payload], &[]).map_err(Tezos)?;
-                    user_data
-                        .create_client(our_identity_id, their_contact_id, &client, None)
-                        .map_err(UserData)?;
-                }
-            }
-
-            Ok(())
-        } else {
-            Err(NotFound)
-        }
+        driver.post_message(&mut rng, our_identity_id, their_contact_id, message)
     })
 }
 
-fn get<'a>(tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<'a> {
-    use DriverError::*;
-
+fn get_messages<T: Tezos>(driver: &Driver<T>) -> Command<T> {
     Box::new(move |input: &str| {
         let mut rng = OsRng;
 
-        let (our_identity_id, input) = uncons_parse(input, "failed to parse identity id")?;
-        let (their_contact_id, _input) = uncons_parse(input, "failed to parse contact id")?;
-        let our_identity = user_data.find_identity(our_identity_id).map_err(UserData)?;
-        let our_x3dh: X3DHClient = bincode::deserialize(&our_identity.x3dh_client).unwrap();
+        let (our_identity_id, input) = uncons_parse::<T, _>(input, "failed to parse identity id")?;
+        let (their_contact_id, _input) = uncons_parse::<T, _>(input, "failed to parse contact id")?;
 
-        let their_contact = user_data.find_contact(their_contact_id).map_err(UserData)?;
-
-        if let Some(their_data) = tezos
-            .retrieve_user_data(&their_contact.address)
-            .map_err(Tezos)?
-        {
-            match user_data
-                .find_client(our_identity_id, their_contact_id)
-                .map_err(UserData)?
-            {
-                Some(client) => {
-                    eprintln!("using existing Client");
-                    let mut latest_message_timestamp = client.latest_message_timestamp;
-                    let mut client: Client = bincode::deserialize(&client.client_data).unwrap();
-                    for message in their_data.postal_box.iter() {
-                        // assuming message is ordered
-                        let timestamp = message.timestamp;
-                        match latest_message_timestamp {
-                            // if the message is older than recorded timestamp, skip it.
-                            Some(latest_message_timestamp)
-                                if latest_message_timestamp >= timestamp =>
-                            {
-                                continue;
-                            }
-                            _ => {
-                                latest_message_timestamp = Some(timestamp);
-                            }
-                        }
-
-                        let message = bincode::deserialize(&message.content).unwrap();
-                        if let Ok(message) = client.attempt_message_decryption(&mut rng, message) {
-                            user_data
-                                .create_message(our_identity_id, their_contact_id, &message)
-                                .map_err(UserData)?;
-                            println!("received {:?}", message);
-                        }
-                    }
-                    user_data
-                        .update_client(
-                            our_identity_id,
-                            their_contact_id,
-                            &client,
-                            latest_message_timestamp.as_ref(),
-                        )
-                        .map_err(UserData)?;
-                }
-                None => {
-                    eprintln!("creating new Client");
-                    let mut client = Client::with_x3dh_client(
-                        our_x3dh,
-                        tezos.address().as_bytes(),
-                        their_contact.address.as_bytes(),
-                    );
-                    let mut latest_message_timestamp = None;
-                    for message in their_data.postal_box.iter() {
-                        latest_message_timestamp = Some(message.timestamp);
-                        let message = bincode::deserialize(&message.content).unwrap();
-                        if let Ok(message) = client.attempt_message_decryption(&mut rng, message) {
-                            user_data
-                                .create_message(our_identity_id, their_contact_id, &message)
-                                .map_err(UserData)?;
-                            // assuming message is ordered
-                            println!("received {:?}", message);
-                        }
-                    }
-                    user_data
-                        .create_client(
-                            our_identity_id,
-                            their_contact_id,
-                            &client,
-                            latest_message_timestamp.as_ref(),
-                        )
-                        .map_err(UserData)?;
-                }
-            }
-
-            Ok(())
-        } else {
-            Err(NotFound)
+        for message in driver.get_messages(&mut rng, our_identity_id, their_contact_id)? {
+            println!("message: {}", String::from_utf8_lossy(&message));
         }
+
+        Ok(())
     })
 }
 
-fn commands<'a>(tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<'a> {
-    subcommands(vec![
-        ("list", list(user_data)),
-        ("generate", generate(user_data)),
-        ("register", register(tezos, user_data)),
-        ("exist", exist(tezos)),
-        ("post", post(tezos, user_data)),
-        ("get", get(tezos, user_data)),
+fn commands<T: Tezos>(driver: &Driver<T>) -> Command<T> {
+    subcommands::<T>(vec![
+        ("list", list(driver)),
+        ("generate", generate(driver)),
+        ("publish", publish(driver)),
+        ("add", add(driver)),
+        ("exist", exist_user(driver)),
+        ("post", post_message(driver)),
+        ("get", get_messages(driver)),
     ])
 }
 
 fn main() {
-    use diesel::prelude::*;
-
     let address = std::env::var("TEZOS_ADDRESS").unwrap();
-    let user_data = MizuConnection::connect(&std::env::var("MIZU_DB").unwrap()).unwrap();
+    let conn = MizuConnection::connect(&std::env::var("MIZU_DB").unwrap()).unwrap();
     let tezos_db_conn =
         SqliteConnection::establish(&std::env::var("MIZU_TEZOS_MOCK").unwrap()).unwrap();
     let tezos = TezosMock::new(&address, &tezos_db_conn);
-    let commands = commands(&tezos, &user_data);
+    let driver = Driver::new(conn, tezos);
+    let commands = commands(&driver);
 
     let mut rl = rustyline::Editor::<()>::new();
     while let Ok(line) = rl.readline("> ") {

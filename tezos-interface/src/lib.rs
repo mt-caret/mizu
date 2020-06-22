@@ -1,4 +1,5 @@
 use chrono::naive::NaiveDateTime;
+use std::fmt::{Debug, Display};
 
 #[derive(Debug)]
 pub struct Message {
@@ -15,8 +16,8 @@ pub struct UserData {
 }
 
 pub trait Tezos {
-    type ReadError;
-    type WriteError;
+    type ReadError: Display + Debug;
+    type WriteError: Debug + Display;
 
     // Read
     /// Returns Tezos address.
