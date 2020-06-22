@@ -22,6 +22,10 @@ pub struct MizuConnection {
 }
 
 impl MizuConnection {
+    pub fn new(conn: SqliteConnection) -> Self {
+        MizuConnection { conn }
+    }
+
     pub fn connect(url: &str) -> std::result::Result<Self, ConnectionError> {
         Ok(Self {
             conn: SqliteConnection::establish(url)?,
@@ -143,6 +147,25 @@ impl MizuConnection {
         let target = dsl::clients.find((identity_id, contact_id));
         diesel::update(target)
             .set(client::UpdateClient {
+                client_data: &bincode::serialize(client).unwrap(),
+                latest_message_timestamp,
+            })
+            .execute(&self.conn)?;
+
+        Ok(())
+    }
+
+    pub fn upsert_client(
+        &self,
+        identity_id: i32,
+        contact_id: i32,
+        client: &Client,
+        latest_message_timestamp: Option<&NaiveDateTime>,
+    ) -> Result<()> {
+        diesel::replace_into(schema::clients::table)
+            .values(&client::NewClient {
+                identity_id,
+                contact_id,
                 client_data: &bincode::serialize(client).unwrap(),
                 latest_message_timestamp,
             })

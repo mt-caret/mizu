@@ -1,4 +1,5 @@
 use chrono::naive::NaiveDateTime;
+use std::fmt::{Debug, Display};
 
 #[derive(Debug)]
 pub struct Message {
@@ -15,8 +16,8 @@ pub struct UserData {
 }
 
 pub trait Tezos {
-    type ReadError;
-    type WriteError;
+    type ReadError: Display + Debug;
+    type WriteError: Debug + Display;
 
     // Read
     /// Returns Tezos address.
@@ -31,4 +32,79 @@ pub trait Tezos {
     fn post(&self, add: &[&[u8]], remove: &[&usize]) -> Result<(), Self::WriteError>;
     fn poke(&self, target_address: &str, data: &[u8]) -> Result<(), Self::WriteError>;
     fn register(&self, identity_key: Option<&[u8]>, prekey: &[u8]) -> Result<(), Self::WriteError>;
+}
+
+impl<'a, T: Tezos> Tezos for &'a T {
+    type ReadError = T::ReadError;
+    type WriteError = T::WriteError;
+
+    fn address(&self) -> &str {
+        (**self).address()
+    }
+
+    fn retrieve_user_data(&self, address: &str) -> Result<Option<UserData>, Self::ReadError> {
+        (**self).retrieve_user_data(address)
+    }
+
+    fn post(&self, add: &[&[u8]], remove: &[&usize]) -> Result<(), Self::WriteError> {
+        (**self).post(add, remove)
+    }
+
+    fn poke(&self, target_address: &str, data: &[u8]) -> Result<(), Self::WriteError> {
+        (**self).poke(target_address, data)
+    }
+
+    fn register(&self, identity_key: Option<&[u8]>, prekey: &[u8]) -> Result<(), Self::WriteError> {
+        (**self).register(identity_key, prekey)
+    }
+}
+
+impl<T: Tezos> Tezos for Box<T> {
+    type ReadError = T::ReadError;
+    type WriteError = T::WriteError;
+
+    fn address(&self) -> &str {
+        (**self).address()
+    }
+
+    fn retrieve_user_data(&self, address: &str) -> Result<Option<UserData>, Self::ReadError> {
+        (**self).retrieve_user_data(address)
+    }
+
+    fn post(&self, add: &[&[u8]], remove: &[&usize]) -> Result<(), Self::WriteError> {
+        (**self).post(add, remove)
+    }
+
+    fn poke(&self, target_address: &str, data: &[u8]) -> Result<(), Self::WriteError> {
+        (**self).poke(target_address, data)
+    }
+
+    fn register(&self, identity_key: Option<&[u8]>, prekey: &[u8]) -> Result<(), Self::WriteError> {
+        (**self).register(identity_key, prekey)
+    }
+}
+
+impl<T: Tezos> Tezos for std::sync::Arc<T> {
+    type ReadError = T::ReadError;
+    type WriteError = T::WriteError;
+
+    fn address(&self) -> &str {
+        (**self).address()
+    }
+
+    fn retrieve_user_data(&self, address: &str) -> Result<Option<UserData>, Self::ReadError> {
+        (**self).retrieve_user_data(address)
+    }
+
+    fn post(&self, add: &[&[u8]], remove: &[&usize]) -> Result<(), Self::WriteError> {
+        (**self).post(add, remove)
+    }
+
+    fn poke(&self, target_address: &str, data: &[u8]) -> Result<(), Self::WriteError> {
+        (**self).poke(target_address, data)
+    }
+
+    fn register(&self, identity_key: Option<&[u8]>, prekey: &[u8]) -> Result<(), Self::WriteError> {
+        (**self).register(identity_key, prekey)
+    }
 }
