@@ -22,6 +22,10 @@ pub struct MizuConnection {
 }
 
 impl MizuConnection {
+    pub fn new(conn: SqliteConnection) -> Self {
+        MizuConnection { conn }
+    }
+
     pub fn connect(url: &str) -> std::result::Result<Self, ConnectionError> {
         Ok(Self {
             conn: SqliteConnection::establish(url)?,
