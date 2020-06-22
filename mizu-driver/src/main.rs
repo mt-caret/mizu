@@ -168,10 +168,7 @@ fn exist<'a>(tezos: &'a TezosMock) -> Command<'a> {
 
     Box::new(move |input: &str| {
         let (address, _rest) = uncons(input).ok_or(NotFound)?;
-        match tezos
-            .retrieve_user_data(address.as_bytes())
-            .map_err(Tezos)?
-        {
+        match tezos.retrieve_user_data(address).map_err(Tezos)? {
             Some(_) => println!("{} exists", address),
             None => println!("{} doesn't exist", address),
         }
@@ -230,8 +227,11 @@ fn post<'a>(tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<'a> 
                 }
                 None => {
                     eprintln!("creating new Client");
-                    let mut client =
-                        Client::with_x3dh_client(our_x3dh, tezos.address(), &their_contact.address);
+                    let mut client = Client::with_x3dh_client(
+                        our_x3dh,
+                        tezos.address().as_bytes(),
+                        their_contact.address.as_bytes(),
+                    );
                     let message = client
                         .create_message(&mut rng, &identity_key, &prekey, message.as_bytes())
                         .unwrap();
@@ -310,8 +310,11 @@ fn get<'a>(tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<'a> {
                 }
                 None => {
                     eprintln!("creating new Client");
-                    let mut client =
-                        Client::with_x3dh_client(our_x3dh, tezos.address(), &their_contact.address);
+                    let mut client = Client::with_x3dh_client(
+                        our_x3dh,
+                        tezos.address().as_bytes(),
+                        their_contact.address.as_bytes(),
+                    );
                     let mut latest_message_timestamp = None;
                     for message in their_data.postal_box.iter() {
                         latest_message_timestamp = Some(message.timestamp);
@@ -355,9 +358,8 @@ fn commands<'a>(tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<
 
 fn main() {
     let address = std::env::var("TEZOS_ADDRESS").unwrap();
-    let address = address.as_bytes();
     let user_data = MizuConnection::connect(&std::env::var("MIZU_DB").unwrap()).unwrap();
-    let tezos = TezosMock::connect(address, &std::env::var("MIZU_TEZOS_MOCK").unwrap()).unwrap();
+    let tezos = TezosMock::connect(&address, &std::env::var("MIZU_TEZOS_MOCK").unwrap()).unwrap();
     let commands = commands(&tezos, &user_data);
 
     let mut rl = rustyline::Editor::<()>::new();
