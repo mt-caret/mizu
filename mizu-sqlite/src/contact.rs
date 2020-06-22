@@ -3,7 +3,7 @@ use crate::schema::*;
 #[derive(Queryable)]
 pub struct Contact {
     pub id: i32,
-    pub address: Vec<u8>,
+    pub address: String,
     pub name: String,
     pub created_at: String,
 }
@@ -11,6 +11,6 @@ pub struct Contact {
 #[derive(Insertable)]
 #[table_name = "contacts"]
 pub struct NewContact<'a> {
-    pub address: &'a [u8],
+    pub address: &'a str,
     pub name: &'a str,
 }

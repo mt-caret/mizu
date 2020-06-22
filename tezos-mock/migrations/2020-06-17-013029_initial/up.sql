@@ -1,6 +1,6 @@
 CREATE TABLE users(
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    address BLOB NOT NULL,
+    address TEXT NOT NULL, -- Tezos address in "tz..." format
     identity_key BLOB NOT NULL,
     prekey BLOB NOT NULL,
     UNIQUE(address)

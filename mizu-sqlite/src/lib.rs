@@ -71,7 +71,7 @@ impl MizuConnection {
         Ok(())
     }
 
-    pub fn create_contact(&self, name: &str, address: &[u8]) -> Result<()> {
+    pub fn create_contact(&self, name: &str, address: &str) -> Result<()> {
         diesel::insert_into(schema::contacts::table)
             .values(&contact::NewContact { name, address })
             .execute(&self.conn)?;

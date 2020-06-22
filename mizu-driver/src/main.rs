@@ -157,9 +157,7 @@ fn register<'a>(tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<
             Box::new(move |input: &str| {
                 let (name, rest) = uncons(input).ok_or(NotFound)?;
                 let (address, _rest) = uncons(rest).ok_or(NotFound)?;
-                user_data
-                    .create_contact(name, address.as_bytes())
-                    .map_err(UserData)
+                user_data.create_contact(name, address).map_err(UserData)
             }),
         ),
     ])

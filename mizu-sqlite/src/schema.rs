@@ -10,7 +10,7 @@ table! {
 table! {
     contacts (id) {
         id -> Integer,
-        address -> Binary,
+        address -> Text,
         name -> Text,
         created_at -> Timestamp,
     }

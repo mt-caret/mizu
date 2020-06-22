@@ -18,7 +18,7 @@ table! {
 table! {
     users (id) {
         id -> Integer,
-        address -> Binary,
+        address -> Text,
         identity_key -> Binary,
         prekey -> Binary,
     }

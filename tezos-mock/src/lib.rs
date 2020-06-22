@@ -15,12 +15,12 @@ type DieselError = diesel::result::Error;
 
 pub struct TezosMock<'a> {
     /// Tezos address
-    address: &'a [u8],
+    address: &'a str,
     conn: SqliteConnection,
 }
 
 impl<'a> TezosMock<'a> {
-    pub fn connect(address: &'a [u8], url: &str) -> ConnectionResult<Self> {
+    pub fn connect(address: &'a str, url: &str) -> ConnectionResult<Self> {
         Ok(TezosMock {
             address,
             conn: SqliteConnection::establish(url)?,
@@ -32,11 +32,11 @@ impl<'a> Tezos for TezosMock<'a> {
     type ReadError = DieselError;
     type WriteError = DieselError;
 
-    fn address(&self) -> &[u8] {
+    fn address(&self) -> &str {
         self.address
     }
 
-    fn retrieve_user_data(&self, address: &[u8]) -> Result<Option<UserData>, Self::ReadError> {
+    fn retrieve_user_data(&self, address: &str) -> Result<Option<UserData>, Self::ReadError> {
         // According to https://docs.diesel.rs/diesel/associations/index.html,
         // selecting three tables is better than joining them.
         // TODO: run queries within a transaction?
@@ -108,7 +108,7 @@ impl<'a> Tezos for TezosMock<'a> {
         Ok(())
     }
 
-    fn poke(&self, target_address: &[u8], data: &[u8]) -> Result<(), Self::WriteError> {
+    fn poke(&self, target_address: &str, data: &[u8]) -> Result<(), Self::WriteError> {
         // TODO: transaction?
         use schema::users::dsl;
         let user_id = dsl::users
