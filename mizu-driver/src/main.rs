@@ -357,9 +357,13 @@ fn commands<'a>(tezos: &'a TezosMock, user_data: &'a MizuConnection) -> Command<
 }
 
 fn main() {
+    use diesel::prelude::*;
+
     let address = std::env::var("TEZOS_ADDRESS").unwrap();
     let user_data = MizuConnection::connect(&std::env::var("MIZU_DB").unwrap()).unwrap();
-    let tezos = TezosMock::connect(&address, &std::env::var("MIZU_TEZOS_MOCK").unwrap()).unwrap();
+    let tezos_db_conn =
+        SqliteConnection::establish(&std::env::var("MIZU_TEZOS_MOCK").unwrap()).unwrap();
+    let tezos = TezosMock::new(&address, &tezos_db_conn);
     let commands = commands(&tezos, &user_data);
 
     let mut rl = rustyline::Editor::<()>::new();

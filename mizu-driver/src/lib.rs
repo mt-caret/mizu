@@ -241,7 +241,13 @@ where
                         &client,
                         latest_message_timestamp.as_ref(),
                     )
-                    .map_err(UserData)
+                    .map_err(UserData)?;
+
+                // wait a sec so that the next message will have distinct timestamp
+                // TODO: better handling
+                std::thread::sleep(std::time::Duration::from_secs(1));
+
+                Ok(())
             }
             None => Err(NotFound),
         }
@@ -318,5 +324,89 @@ where
             Some(data) => Ok(data.pokes),
             None => Err(NotFound),
         }
+    }
+}
+
+// ensure test related code (especially migration SQL) is not included in the binary
+#[cfg(test)]
+mod test {
+    use super::*;
+    use diesel::{connection::SimpleConnection, prelude::*};
+    use mizu_sqlite::MizuConnection;
+    use rand::rngs::OsRng;
+    use tezos_mock::TezosMock;
+
+    fn prepare_user_database() -> MizuConnection {
+        // Create an in-memory SQLite database
+        let conn = SqliteConnection::establish(":memory:").unwrap();
+        let migration =
+            include_str!("../../mizu-sqlite/migrations/2020-06-16-100417_initial/up.sql");
+        conn.batch_execute(migration).unwrap();
+
+        MizuConnection::new(conn)
+    }
+
+    #[test]
+    fn test_smoke_1() {
+        // use Tezos address
+        let alice_address = "alice";
+        let bob_address = "bob";
+
+        let mock_conn = {
+            // Create an in-memory SQLite database
+            let conn = SqliteConnection::establish(":memory:").unwrap();
+            let migration =
+                include_str!("../../tezos-mock/migrations/2020-06-17-013029_initial/up.sql");
+            conn.batch_execute(migration).unwrap();
+            conn
+        };
+
+        let mut rng = OsRng;
+
+        let alice = {
+            let user_database = prepare_user_database();
+            let tezos_mock = TezosMock::new(alice_address, &mock_conn);
+            Driver::new(user_database, tezos_mock)
+        };
+        let bob = {
+            let user_database = prepare_user_database();
+            // use Tezos address
+            let tezos_mock = TezosMock::new(bob_address, &mock_conn);
+            Driver::new(user_database, tezos_mock)
+        };
+
+        // first, each user generates identity and uploads to Tezos.
+        alice
+            .generate_identity(&mut rng, "alice's identity")
+            .unwrap();
+        alice.publish_identity(1).unwrap();
+        bob.generate_identity(&mut rng, "bob's identity").unwrap();
+        bob.publish_identity(1).unwrap();
+
+        // next, each user adds each other to the contact list (poke is not implemented yet)
+        alice.add_contact("bob's address", bob_address).unwrap();
+        bob.add_contact("alice's address", alice_address).unwrap();
+
+        // alice sends some messages to bob.
+        alice
+            .post_message(&mut rng, 1, 1, "Hello from alice!")
+            .unwrap();
+        alice
+            .post_message(&mut rng, 1, 1, "waiting for response...")
+            .unwrap();
+
+        // bob receives the messages
+        let messages = bob.get_messages(&mut rng, 1, 1).unwrap();
+        assert_eq!(
+            messages,
+            [b"Hello from alice!" as &[u8], b"waiting for response...",]
+        );
+
+        // bob replies
+        bob.post_message(&mut rng, 1, 1, "こんにちは").unwrap();
+
+        // alice receives the reply
+        let messages = alice.get_messages(&mut rng, 1, 1).unwrap();
+        assert_eq!(messages, ["こんにちは".as_bytes(),]);
     }
 }
