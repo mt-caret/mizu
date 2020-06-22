@@ -290,7 +290,7 @@ fn preapply_operation(host: &Url, op: &Operation) -> Result<Value> {
         .and_then(|x| from_value(&x))
 }
 
-fn inject_operation(host: &Url, signed_sop: &str) -> Result<Value> {
+fn inject_operation(host: &Url, signed_sop: &str) -> Result<String> {
     let url = host
         .join("injection/operation?chain=main")
         .map_err(TezosError::UrlParse)?;
@@ -359,6 +359,38 @@ impl MizuOp {
     }
 }
 
+fn serialize_and_set_fee(host: &Url, op: &mut Operation, debug: bool) -> Result<String> {
+    let sop = serialize_operation(&host, &op)?;
+
+    if debug {
+        eprintln!("serialized_operation: {}", &sop);
+    }
+
+    // sop is hex-encoded so we divide by 2 and add 64 bytes for the appended signature.
+    let op_byte_length = sop.len() / 2 + 64;
+
+    // currently hardcoded, since it seems we can't get these values programmatically:
+    // https://gitlab.com/tezos/tezos/-/issues/425
+    let minimal_fees = 100;
+    let minimal_nanotez_per_gas_unit = 100;
+    let minimal_nanotez_per_byte = 1000;
+
+    let total_fee = (minimal_fees * 1000
+        + minimal_nanotez_per_byte * op_byte_length.clone()
+        + minimal_nanotez_per_gas_unit * op.gas_limit.clone())
+        / 1000;
+
+    if op.fee <= total_fee {
+        op.fee = total_fee + 1;
+        if debug {
+            eprintln!("fee set to {}", op.fee);
+        }
+        serialize_and_set_fee(host, op, debug)
+    } else {
+        Ok(sop)
+    }
+}
+
 // Code here was written based on the following sources:
 // - https://www.ocamlpro.com/2018/11/15/an-introduction-to-tezos-rpcs-a-basic-wallet/
 // - https://medium.com/chain-accelerator/how-to-use-tezos-rpcs-16c362f45d64
@@ -420,20 +452,11 @@ fn run_mizu_operation(
         signature: None,
     };
 
-    let sop = serialize_operation(&host, &op)?;
+    let (dummy_signature, _) =
+        crypto::sign_serialized_operation(&serialize_operation(&host, &op)?, &secret_key)
+            .map_err(TezosError::Crypto)?;
 
-    if debug {
-        eprintln!("serialized_operation: {}", &sop);
-    }
-
-    let (signature, _) =
-        crypto::sign_serialized_operation(&sop, &secret_key).map_err(TezosError::Crypto)?;
-
-    if debug {
-        eprintln!("signature: {}", signature);
-    }
-
-    op.signature = Some(signature);
+    op.signature = Some(dummy_signature);
 
     let dry_run_result = dry_run_contract(&host, &op, &chain_id)?;
 
@@ -448,19 +471,15 @@ fn run_mizu_operation(
     op.gas_limit = dry_run_result.consumed_gas + 100;
     op.storage_limit = dry_run_result.paid_storage_size_diff + 20;
     op.signature = None;
-    // TODO: calculate fee here
 
-    let sop = serialize_operation(&host, &op)?;
-
-    if debug {
-        eprintln!("serialized_operation: {}", &sop);
-    }
+    let sop = serialize_and_set_fee(&host, &mut op, debug)?;
 
     let (signature, raw_signature) =
         crypto::sign_serialized_operation(&sop, &secret_key).map_err(TezosError::Crypto)?;
 
     if debug {
         eprintln!("signature: {}", signature);
+        eprintln!("raw_signature length: {}", raw_signature.len()); // 64
     }
 
     op.protocol = Some(PROTOCOL_CARTHAGE.to_string());
@@ -480,13 +499,18 @@ fn run_mizu_operation(
     }
 
     let signed_sop = [sop, hex::encode(raw_signature)].concat();
-    let hash = &inject_operation(&host, &signed_sop)?[0];
+
+    if debug {
+        eprintln!("signed_sop: {}", signed_sop);
+    }
+
+    let hash = inject_operation(&host, &signed_sop)?;
 
     if debug {
         eprintln!("operation hash: {}", hash);
     }
 
-    from_value(hash)
+    Ok(hash)
 }
 
 fn main() -> Result<()> {
