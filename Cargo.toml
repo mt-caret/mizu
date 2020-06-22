@@ -4,6 +4,7 @@ members = [
     "mizu-crypto",
     "mizu-sqlite",
     "mizu-tezos-interface",
+    "mizu-tezos",
     "mizu-tezos-mock",
     "mizu-driver",
 ]
