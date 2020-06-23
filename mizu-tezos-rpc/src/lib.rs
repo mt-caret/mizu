@@ -203,7 +203,13 @@ pub struct TezosRpc {
 }
 
 impl TezosRpc {
-    pub fn new(debug: bool, host: Url, address: String, secret_key: String, contract_address: String) -> Self {
+    pub fn new(
+        debug: bool,
+        host: Url,
+        address: String,
+        secret_key: String,
+        contract_address: String,
+    ) -> Self {
         Self {
             debug,
             host,
