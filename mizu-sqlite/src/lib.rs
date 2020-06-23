@@ -1,8 +1,9 @@
-//! TODO: handle errors properly
+// All of the `unwrap()`s in this module are serializing clients and they should succeed.
 
 #[macro_use]
 extern crate diesel;
 
+use chrono::naive::NaiveDateTime;
 use diesel::prelude::*;
 use mizu_crypto::x3dh::X3DHClient;
 use mizu_crypto::Client;
@@ -14,37 +15,53 @@ pub mod message;
 
 mod schema;
 
+type Result<T> = std::result::Result<T, diesel::result::Error>;
+
 pub struct MizuConnection {
     conn: SqliteConnection,
 }
 
 impl MizuConnection {
-    pub fn create_identity(&self, name: &str, x3dh: &X3DHClient) {
+    pub fn new(conn: SqliteConnection) -> Self {
+        MizuConnection { conn }
+    }
+
+    pub fn connect(url: &str) -> std::result::Result<Self, ConnectionError> {
+        Ok(Self {
+            conn: SqliteConnection::establish(url)?,
+        })
+    }
+
+    pub fn create_identity(&self, name: &str, x3dh: &X3DHClient) -> Result<()> {
         diesel::insert_into(schema::identities::table)
             .values(&identity::NewIdentity {
                 name,
                 x3dh_client: &bincode::serialize(&x3dh).unwrap(),
             })
-            .execute(&self.conn)
-            .unwrap();
+            .execute(&self.conn)?;
+
+        Ok(())
     }
 
-    pub fn list_identities(&self) -> Vec<identity::Identity> {
-        schema::identities::dsl::identities
-            .load::<identity::Identity>(&self.conn)
-            .unwrap()
+    pub fn list_identities(&self) -> Result<Vec<identity::Identity>> {
+        schema::identities::dsl::identities.load::<identity::Identity>(&self.conn)
     }
 
-    pub fn find_identities(&self, needle: &str) -> Vec<identity::Identity> {
+    pub fn find_identity(&self, id: i32) -> Result<identity::Identity> {
+        use schema::identities::dsl::identities;
+
+        identities.find(id).first::<identity::Identity>(&self.conn)
+    }
+
+    pub fn find_identities(&self, needle: &str) -> Result<Vec<identity::Identity>> {
         use schema::identities::dsl::*;
 
         identities
             .filter(name.eq(needle))
             .load::<identity::Identity>(&self.conn)
-            .unwrap()
     }
 
-    pub fn update_identity(&self, id: i32, name: &str, x3dh: &X3DHClient) {
+    pub fn update_identity(&self, id: i32, name: &str, x3dh: &X3DHClient) -> Result<()> {
         use schema::identities::dsl;
 
         let target = dsl::identities.find(id);
@@ -53,80 +70,127 @@ impl MizuConnection {
                 dsl::name.eq(name),
                 dsl::x3dh_client.eq(bincode::serialize(&x3dh).unwrap()),
             ))
-            .execute(&self.conn)
-            .unwrap();
+            .execute(&self.conn)?;
+
+        Ok(())
     }
 
-    pub fn create_contact(&self, name: &str, public_key: &[u8]) {
+    pub fn create_contact(&self, name: &str, address: &str) -> Result<()> {
         diesel::insert_into(schema::contacts::table)
-            .values(&contact::NewContact { name, public_key })
-            .execute(&self.conn)
-            .unwrap();
+            .values(&contact::NewContact { name, address })
+            .execute(&self.conn)?;
+
+        Ok(())
     }
 
-    pub fn list_contacts(&self) -> Vec<contact::Contact> {
-        schema::contacts::dsl::contacts
-            .load::<contact::Contact>(&self.conn)
-            .unwrap()
+    pub fn list_contacts(&self) -> Result<Vec<contact::Contact>> {
+        schema::contacts::dsl::contacts.load::<contact::Contact>(&self.conn)
     }
 
-    pub fn find_contacts(&self, needle: &str) -> Vec<contact::Contact> {
+    pub fn find_contact(&self, contact_id: i32) -> Result<contact::Contact> {
+        use schema::contacts::dsl::contacts;
+
+        contacts
+            .find(contact_id)
+            .first::<contact::Contact>(&self.conn)
+    }
+
+    pub fn find_contacts(&self, needle: &str) -> Result<Vec<contact::Contact>> {
         use schema::contacts::dsl::*;
 
         contacts
             .filter(name.eq(needle))
             .load::<contact::Contact>(&self.conn)
-            .unwrap()
     }
 
-    pub fn create_client(&self, identity_id: i32, contact_id: i32, client_data: &[u8]) {
+    pub fn create_client(
+        &self,
+        identity_id: i32,
+        contact_id: i32,
+        client: &Client,
+        latest_message_timestamp: Option<&NaiveDateTime>,
+    ) -> Result<()> {
         diesel::insert_into(schema::clients::table)
             .values(&client::NewClient {
                 identity_id,
                 contact_id,
-                client_data,
+                client_data: &bincode::serialize(client).unwrap(),
+                latest_message_timestamp,
             })
-            .execute(&self.conn)
-            .unwrap();
+            .execute(&self.conn)?;
+
+        Ok(())
     }
 
-    pub fn list_clients(&self) -> Vec<client::Client> {
-        schema::clients::dsl::clients
-            .load::<client::Client>(&self.conn)
-            .unwrap()
+    pub fn list_clients(&self) -> Result<Vec<client::Client>> {
+        schema::clients::dsl::clients.load::<client::Client>(&self.conn)
     }
 
-    pub fn find_client(&self, identity_id: i32, contact_id: i32) -> client::Client {
+    pub fn find_client(&self, identity_id: i32, contact_id: i32) -> Result<Option<client::Client>> {
         use schema::clients::dsl;
 
         dsl::clients
             .find((identity_id, contact_id))
             .first(&self.conn)
-            .unwrap()
+            .optional()
     }
 
-    pub fn update_client(&self, identity_id: i32, contact_id: i32, client: &Client) {
+    pub fn update_client(
+        &self,
+        identity_id: i32,
+        contact_id: i32,
+        client: &Client,
+        latest_message_timestamp: Option<&NaiveDateTime>,
+    ) -> Result<()> {
         use schema::clients::dsl;
 
         let target = dsl::clients.find((identity_id, contact_id));
         diesel::update(target)
-            .set(dsl::client_data.eq(bincode::serialize(client).unwrap()))
-            .execute(&self.conn)
-            .unwrap();
+            .set(client::UpdateClient {
+                client_data: &bincode::serialize(client).unwrap(),
+                latest_message_timestamp,
+            })
+            .execute(&self.conn)?;
+
+        Ok(())
     }
 
-    pub fn create_message(&self, identity_id: i32, contact_id: i32, content: &[u8]) {
+    pub fn upsert_client(
+        &self,
+        identity_id: i32,
+        contact_id: i32,
+        client: &Client,
+        latest_message_timestamp: Option<&NaiveDateTime>,
+    ) -> Result<()> {
+        diesel::replace_into(schema::clients::table)
+            .values(&client::NewClient {
+                identity_id,
+                contact_id,
+                client_data: &bincode::serialize(client).unwrap(),
+                latest_message_timestamp,
+            })
+            .execute(&self.conn)?;
+
+        Ok(())
+    }
+
+    pub fn create_message(&self, identity_id: i32, contact_id: i32, content: &[u8]) -> Result<()> {
         diesel::insert_into(schema::messages::table)
             .values(&message::NewMessage {
                 identity_id,
                 contact_id,
                 content,
             })
-            .execute(&self.conn)
-            .unwrap();
+            .execute(&self.conn)?;
+
+        Ok(())
     }
 
-    pub fn find_messages(&self, identity_id: i32, contact_id: i32) -> Vec<message::Message> {
+    pub fn find_messages(
+        &self,
+        identity_id: i32,
+        contact_id: i32,
+    ) -> Result<Vec<message::Message>> {
         use schema::messages::dsl;
 
         // TODO: limit clause
@@ -138,12 +202,5 @@ impl MizuConnection {
             )
             .order_by(dsl::id.asc()) // assuming messages in the DB are not shuffled
             .load::<message::Message>(&self.conn)
-            .unwrap()
     }
-}
-
-pub fn connect(url: &str) -> Result<MizuConnection, ConnectionError> {
-    Ok(MizuConnection {
-        conn: SqliteConnection::establish(url)?,
-    })
 }
