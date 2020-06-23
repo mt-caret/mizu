@@ -32,6 +32,7 @@ CREATE TABLE messages(
     identity_id INTEGER NOT NULL,
     contact_id INTEGER NOT NULL,
     content BLOB NOT NULL,
+    my_message BOOLEAN NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(identity_id) REFERENCES identities(id),
     FOREIGN KEY(contact_id) REFERENCES contacts(id)

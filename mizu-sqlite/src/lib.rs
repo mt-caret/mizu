@@ -174,12 +174,19 @@ impl MizuConnection {
         Ok(())
     }
 
-    pub fn create_message(&self, identity_id: i32, contact_id: i32, content: &[u8]) -> Result<()> {
+    pub fn create_message(
+        &self,
+        identity_id: i32,
+        contact_id: i32,
+        content: &[u8],
+        my_message: bool,
+    ) -> Result<()> {
         diesel::insert_into(schema::messages::table)
             .values(&message::NewMessage {
                 identity_id,
                 contact_id,
                 content,
+                my_message,
             })
             .execute(&self.conn)?;
 
