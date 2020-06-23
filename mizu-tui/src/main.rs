@@ -1,13 +1,11 @@
 use cursive::align::HAlign;
-use cursive::theme::BaseColor;
-use cursive::theme::Color;
+use cursive::event::Key;
+use cursive::menu::MenuTree;
 use cursive::theme::Effect;
-use cursive::theme::Style;
-use cursive::traits::Resizable;
+use cursive::traits::*;
 use cursive::utils::markup::StyledString;
-use cursive::views::{Dialog, DummyView, LinearLayout, TextArea, TextView};
+use cursive::views::*;
 use cursive::View;
-use structopt::StructOpt;
 
 fn render_identity(identity: &mizu_sqlite::identity::Identity) -> impl View {
     // id. **name**
@@ -15,16 +13,14 @@ fn render_identity(identity: &mizu_sqlite::identity::Identity) -> impl View {
     let mut styled = StyledString::plain(format!("{:>3}. ", identity.id));
     styled.append_styled(format!("{}\n", identity.name), Effect::Bold);
     styled.append(format!("     {}", identity.address));
-    TextView::new(styled)
+    Panel::new(TextView::new(styled)).title("Your identity")
 }
 
-fn render_clients<I: Iterator<Item = mizu_sqlite::client::ClientInfo>>(
-    iter: I,
-) -> impl Iterator<Item = impl View> {
+fn render_contacts<I: Iterator<Item = mizu_sqlite::client::ClientInfo>>(iter: I) -> impl View {
     // contact_id. **name**       timestamp
     //             tezos_address
     // TODO: show last message like Signal?
-    iter.map(|client| {
+    let contacts = iter.fold(LinearLayout::vertical(), |view, client| {
         let mut styled = StyledString::plain(format!("{:>3}. ", client.contact_id));
         styled.append_styled(format!("{:<15}", client.name), Effect::Bold);
         match client.latest_message_timestamp {
@@ -32,13 +28,13 @@ fn render_clients<I: Iterator<Item = mizu_sqlite::client::ClientInfo>>(
             None => styled.append("\n"),
         }
         styled.append(format!("     {}", client.address));
-        TextView::new(styled)
-    })
+        view.child(TextView::new(styled))
+    });
+
+    Panel::new(contacts).title("Contacts")
 }
 
-fn render_messages<I: Iterator<Item = mizu_sqlite::message::Message>>(
-    iter: I,
-) -> impl Iterator<Item = impl View> {
+fn render_messages<I: Iterator<Item = mizu_sqlite::message::Message>>(iter: I) -> impl View {
     // messages from me:
     // <right align> content
     //             timestamp
@@ -47,20 +43,39 @@ fn render_messages<I: Iterator<Item = mizu_sqlite::message::Message>>(
     // content   <left align>
     // timestamp
 
-    iter.map(|message| {
+    iter.fold(LinearLayout::vertical(), |view, message| {
         let content = format!("{}\n", String::from_utf8_lossy(&message.content));
         let timestamp = message.created_at.to_string();
         let mut styled = StyledString::new();
         styled.append_styled(content, Effect::Bold);
         styled.append(timestamp);
 
-        TextView::new(styled).h_align(if message.my_message {
+        view.child(TextView::new(styled).h_align(if message.my_message {
             HAlign::Right
         } else {
             HAlign::Left
-        })
+        }))
     })
 }
+
+/*
+fn aligned_inputs<S: Into<String>>(labels: Vec<S>) -> impl View {
+    const DEFAULT_LENGTH: usize = 15;
+
+    let labels: Vec<String> = labels.into_iter().map(Into::into).collect();
+    let max_len = labels.iter().map(|s| s.len()).max().unwrap();
+
+    labels
+        .into_iter()
+        .fold(LinearLayout::vertical(), |view, label| {
+            view.child(
+                LinearLayout::horizontal()
+                    .child(TextView::new(format!("{0:<1$}", label, max_len)))
+                    .child(EditView::new().min_width(DEFAULT_LENGTH)),
+            )
+        })
+}
+*/
 
 fn main() {
     use chrono::naive::NaiveDate;
@@ -86,12 +101,9 @@ fn main() {
             latest_message_timestamp: Some(NaiveDate::from_ymd(2038, 12, 11).and_hms(7, 23, 54)),
         },
     ];
-    let mut left_view = LinearLayout::vertical();
-    left_view.add_child(render_identity(&identity));
-    left_view.add_child(DummyView);
-    for view in render_clients(client_info.into_iter()) {
-        left_view.add_child(view);
-    }
+    let left_view = LinearLayout::vertical()
+        .child(render_identity(&identity))
+        .child(render_contacts(client_info.into_iter()));
 
     let messages = vec![
         mizu_sqlite::message::Message {
@@ -127,12 +139,12 @@ fn main() {
             created_at: NaiveDate::from_ymd(1996, 5, 24).and_hms(1, 25, 1),
         },
     ];
-    let mut right_view = LinearLayout::vertical();
-    for view in render_messages(messages.into_iter()) {
-        right_view.add_child(view);
-        right_view.add_child(DummyView);
-    }
-    right_view.add_child(TextArea::new());
+    let right_view = Panel::new(
+        LinearLayout::vertical()
+            .child(render_messages(messages.into_iter()))
+            .child(TextArea::new().min_height(3)),
+    )
+    .title("Messages");
 
     let view = LinearLayout::horizontal()
         .child(left_view)
@@ -140,6 +152,36 @@ fn main() {
         .child(right_view.full_screen());
 
     let mut siv = cursive::default();
+    siv.menubar()
+        .add_subtree(
+            "Application",
+            MenuTree::new()
+                .leaf("About Mizu", |_c| {})
+                .leaf("Exit", |c| c.quit()),
+        )
+        .add_subtree(
+            "Identity",
+            MenuTree::new().leaf("register", |c| {
+                const IDENTITY_FILE_EDIT: &str = "IDENTITY_FILE_EDIT";
+
+                let content = LinearLayout::horizontal()
+                    .child(TextView::new("identity file: "))
+                    .child(EditView::new().with_name(IDENTITY_FILE_EDIT).min_width(15));
+
+                c.add_layer(
+                    Dialog::around(content)
+                        .title("Register your identity with Mizu")
+                        .dismiss_button("Cancel")
+                        .button("Ok", |c| {
+                            c.pop_layer();
+                        })
+                        .h_align(HAlign::Center),
+                );
+            }),
+        );
+
+    siv.set_autohide_menu(false);
     siv.add_fullscreen_layer(view);
+    siv.add_global_callback(Key::Esc, |c| c.select_menubar());
     siv.run();
 }

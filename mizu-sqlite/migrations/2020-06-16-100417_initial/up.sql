@@ -13,7 +13,8 @@ CREATE TABLE identities(
     name TEXT NOT NULL,
     address TEXT NOT NULL, -- Tezos address
     x3dh_client BLOB NOT NULL, -- mizu_crypto::x3dh::X3DHClient in bincode
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(address)
 );
 
 -- Mizu keeps a mizu_crypto::Client for each (account, contact) pair.
