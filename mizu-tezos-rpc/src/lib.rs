@@ -11,10 +11,13 @@ use std::io;
 use thiserror::Error;
 use url::Url;
 
+use chrono::DateTime;
+use mizu_tezos_interface::*;
+
 static PROTOCOL_CARTHAGE: &str = "PsCARTHAGazKbHtnKfLzQg3kms52kSRpgnDY982a9oYsSXRLQEb";
 
 #[derive(Error, Debug)]
-pub enum TezosError {
+pub enum RpcError {
     #[error("failed to parse url: {0}")]
     UrlParse(url::ParseError),
     #[error("error: {0}")]
@@ -27,9 +30,11 @@ pub enum TezosError {
     Crypto(crypto::Error),
     #[error("tezos node rpc error: {0}")]
     Rpc(Value),
+    #[error("error when decoding user data: {0}")]
+    UserData(String),
 }
 
-type Result<T> = std::result::Result<T, TezosError>;
+type Result<T> = std::result::Result<T, RpcError>;
 
 #[derive(Deserialize, Debug)]
 struct Bootstrapped {
@@ -87,7 +92,7 @@ struct Constants {
 }
 
 fn parse_bigint(s: String) -> Result<BigInt> {
-    s.parse::<BigInt>().map_err(TezosError::DeserializeBigInt)
+    s.parse::<BigInt>().map_err(RpcError::DeserializeBigInt)
 }
 
 #[derive(Debug)]
@@ -154,7 +159,7 @@ where
     T: serde::de::DeserializeOwned,
 {
     serde_json::value::from_value(value.clone())
-        .map_err(|e| TezosError::SerdeDeserialize(e, value.clone()))
+        .map_err(|e| RpcError::SerdeDeserialize(e, value.clone()))
 }
 
 fn deserialize_bigint_from_value(value: &Value) -> Result<BigInt> {
@@ -195,14 +200,11 @@ pub struct TezosRpc {
     address: String,
     secret_key: String,
     contract_address: String,
-    //    /// Tezos address
-    //    address: &'a str,
-    //    conn: &'a SqliteConnection,
 }
 
 impl TezosRpc {
     fn resolve_path(&self, path: &str) -> Result<Url> {
-        self.host.join(path).map_err(TezosError::UrlParse)
+        self.host.join(path).map_err(RpcError::UrlParse)
     }
 
     fn bootstrapped(&self) -> Result<Bootstrapped> {
@@ -211,7 +213,7 @@ impl TezosRpc {
         ureq::get(url.as_str())
             .call()
             .into_json()
-            .map_err(TezosError::IO)
+            .map_err(RpcError::IO)
             .and_then(|x| from_value(&x))
     }
 
@@ -221,7 +223,7 @@ impl TezosRpc {
         ureq::get(url.as_str())
             .call()
             .into_json()
-            .map_err(TezosError::IO)
+            .map_err(RpcError::IO)
             .and_then(|x| from_value(&x))
     }
 
@@ -231,7 +233,7 @@ impl TezosRpc {
         ureq::get(url.as_str())
             .call()
             .into_json()
-            .map_err(TezosError::IO)
+            .map_err(RpcError::IO)
             .and_then(|x| from_value(&x))
     }
 
@@ -241,7 +243,7 @@ impl TezosRpc {
         ureq::get(url.as_str())
             .call()
             .into_json()
-            .map_err(TezosError::IO)
+            .map_err(RpcError::IO)
             .and_then(|x| from_value(&x))
     }
 
@@ -258,7 +260,7 @@ impl TezosRpc {
         let s: String = ureq::get(url.as_str())
             .call()
             .into_json()
-            .map_err(TezosError::IO)
+            .map_err(RpcError::IO)
             .and_then(|x| from_value(&x))?;
         parse_bigint(s)
     }
@@ -271,7 +273,7 @@ impl TezosRpc {
         ureq::post(url.as_str())
             .send_json(payload)
             .into_json()
-            .map_err(TezosError::IO)
+            .map_err(RpcError::IO)
             .and_then(|x| from_value(&x))
     }
 
@@ -287,7 +289,7 @@ impl TezosRpc {
         let result: Value = ureq::post(url.as_str())
             .send_json(payload)
             .into_json()
-            .map_err(TezosError::IO)
+            .map_err(RpcError::IO)
             .and_then(|x| from_value(&x))?;
 
         let op_result = &result["contents"][0]["metadata"]["operation_result"];
@@ -314,7 +316,7 @@ impl TezosRpc {
         ureq::post(url.as_str())
             .send_json(payload)
             .into_json()
-            .map_err(TezosError::IO)
+            .map_err(RpcError::IO)
             .and_then(|x| from_value(&x))
     }
 
@@ -326,11 +328,11 @@ impl TezosRpc {
         ureq::post(url.as_str())
             .send_json(payload)
             .into_json()
-            .map_err(TezosError::IO)
+            .map_err(RpcError::IO)
             .and_then(|x| from_value(&x))
     }
 
-    pub fn get_from_big_map(&self, key: &str) -> Result<Expr> {
+    pub fn get_from_big_map(&self, key: &str) -> Result<Option<Expr>> {
         let url = self.resolve_path(
             &[
                 "chains/main/blocks/head/context/contracts/",
@@ -348,11 +350,16 @@ impl TezosRpc {
             }
         });
 
-        ureq::post(url.as_str())
+        let value = ureq::post(url.as_str())
             .send_json(payload)
             .into_json()
-            .map_err(TezosError::IO)
-            .and_then(|x| from_value(&x))
+            .map_err(RpcError::IO)?;
+
+        if value.is_null() {
+            Ok(None)
+        } else {
+            from_value(&value).map(Some)
+        }
     }
 
     fn serialize_and_set_fee(&self, op: &mut Operation) -> Result<String> {
@@ -443,7 +450,7 @@ impl TezosRpc {
 
         let (dummy_signature, _) =
             crypto::sign_serialized_operation(&self.serialize_operation(&op)?, &self.secret_key)
-                .map_err(TezosError::Crypto)?;
+                .map_err(RpcError::Crypto)?;
 
         op.signature = Some(dummy_signature);
 
@@ -463,8 +470,8 @@ impl TezosRpc {
 
         let sop = self.serialize_and_set_fee(&mut op)?;
 
-        let (signature, raw_signature) = crypto::sign_serialized_operation(&sop, &self.secret_key)
-            .map_err(TezosError::Crypto)?;
+        let (signature, raw_signature) =
+            crypto::sign_serialized_operation(&sop, &self.secret_key).map_err(RpcError::Crypto)?;
 
         if self.debug {
             eprintln!("signature: {}", signature);
@@ -480,7 +487,7 @@ impl TezosRpc {
             // some error occurred
             eprintln!("preapply error: {}", preapply_result);
 
-            return Err(TezosError::Rpc(preapply_result));
+            return Err(RpcError::Rpc(preapply_result));
         }
 
         if self.debug {
@@ -503,6 +510,101 @@ impl TezosRpc {
     }
 }
 
+fn decode_bytes(value: &Value) -> Result<Vec<u8>> {
+    let s = value
+        .get("bytes")
+        .ok_or_else(|| RpcError::UserData("expected bytes".to_string()))?
+        .as_str()
+        .ok_or_else(|| RpcError::UserData("expected string".to_string()))?;
+    hex::decode(s).map_err(|e| RpcError::UserData(format!("{}", e)))
+}
+
+fn decode_message(value: &Value) -> Result<Message> {
+    let content = decode_bytes(&value["args"][0])?;
+    let timestamp_str = value["args"][1]
+        .get("string")
+        .ok_or_else(|| RpcError::UserData("expected string".to_string()))?
+        .as_str()
+        .ok_or_else(|| RpcError::UserData("expected string".to_string()))?;
+    let timestamp = DateTime::parse_from_rfc3339(&timestamp_str)
+        .map_err(|e| RpcError::UserData(format!("error parsing data: {}", e)))?
+        .naive_utc();
+
+    Ok(Message { content, timestamp })
+}
+
+fn parse_user_data(expr: &Expr) -> Result<UserData> {
+    let value = serde_json::json!(expr);
+    let identity_key = decode_bytes(&value["args"][0]["args"][0])?;
+    let prekey = decode_bytes(&value["args"][0]["args"][1])?;
+    let postal_box = value["args"][1]["args"][0]
+        .as_array()
+        .ok_or_else(|| RpcError::UserData("expected array".to_string()))?
+        .into_iter()
+        .map(decode_message)
+        .collect::<Result<Vec<_>>>()?;
+    let pokes = value["args"][1]["args"][1]
+        .as_array()
+        .ok_or_else(|| RpcError::UserData("expected array".to_string()))?
+        .into_iter()
+        .map(decode_bytes)
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(UserData {
+        identity_key,
+        prekey,
+        postal_box,
+        pokes,
+    })
+}
+
+impl Tezos for TezosRpc {
+    type ReadError = RpcError;
+    type WriteError = RpcError;
+
+    fn address(&self) -> &str {
+        &self.address
+    }
+
+    fn retrieve_user_data(
+        &self,
+        address: &str,
+    ) -> std::result::Result<Option<UserData>, Self::ReadError> {
+        let value = self.get_from_big_map(address)?;
+        match value {
+            None => Ok(None),
+            Some(value) => parse_user_data(&value).map(Some),
+        }
+    }
+
+    fn post(&self, add: &[&[u8]], remove: &[&usize]) -> std::result::Result<(), Self::WriteError> {
+        let add = add.iter().map(|x| x.to_vec()).collect();
+        let remove = remove.iter().map(|&&x| x.into()).collect();
+        let op = MizuOp::Post(add, remove);
+
+        let _hash = self.run_mizu_operation(&op)?;
+        Ok(())
+    }
+
+    fn poke(&self, target_address: &str, data: &[u8]) -> std::result::Result<(), Self::WriteError> {
+        let op = MizuOp::Poke(target_address.to_string(), data.to_vec());
+
+        let _hash = self.run_mizu_operation(&op)?;
+        Ok(())
+    }
+
+    fn register(
+        &self,
+        identity_key: Option<&[u8]>,
+        prekey: &[u8],
+    ) -> std::result::Result<(), Self::WriteError> {
+        let op = MizuOp::Register(identity_key.map(|x| x.to_vec()), prekey.to_vec());
+
+        let _hash = self.run_mizu_operation(&op)?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -510,7 +612,7 @@ mod tests {
     fn get_tezos_rpc() -> Result<TezosRpc> {
         Ok(TezosRpc {
             debug: false,
-            host: Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?,
+            host: Url::parse("https://carthagenet.smartpy.io").map_err(RpcError::UrlParse)?,
             address: "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB".to_string(),
             secret_key: "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk".to_string(),
             contract_address: "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk".to_string(),
@@ -542,7 +644,19 @@ mod tests {
     fn reads_work() -> Result<()> {
         let rpc = get_tezos_rpc()?;
 
+        println!("{}", serde_json::json!(rpc.get_from_big_map(&rpc.address)?));
         assert!(rpc.get_from_big_map(&rpc.address).is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn reads_to_unknown_address() -> Result<()> {
+        let rpc = get_tezos_rpc()?;
+
+        assert!(rpc
+            .get_from_big_map("tz1PtxhBALR5qE3heaR9AY8khUBCkuGwUKjA")
+            .is_ok());
 
         Ok(())
     }
