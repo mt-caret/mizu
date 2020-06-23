@@ -9,6 +9,14 @@ pub struct Client {
     pub latest_message_timestamp: Option<NaiveDateTime>,
 }
 
+#[derive(Queryable)]
+pub struct ClientWithName {
+    pub contact_id: i32,
+    pub address: String,
+    pub name: String,
+    pub latest_message_timestamp: Option<NaiveDateTime>,
+}
+
 #[derive(Insertable)]
 #[table_name = "clients"]
 pub struct NewClient<'a> {
