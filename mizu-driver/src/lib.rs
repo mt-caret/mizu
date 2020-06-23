@@ -5,11 +5,15 @@ use mizu_crypto::x3dh::X3DHClient;
 use mizu_crypto::Client;
 use mizu_sqlite::MizuConnection;
 use mizu_sqlite::{contact::Contact, identity::Identity, message::Message};
+use mizu_tezos::TezosRpc;
 use mizu_tezos_interface::Tezos;
 use rand::{CryptoRng, RngCore};
 use std::convert::TryInto;
 use std::fmt::{Debug, Display};
 use thiserror::Error;
+
+pub mod contract;
+pub mod faucet;
 
 type DieselError = diesel::result::Error;
 
@@ -326,6 +330,32 @@ where
             None => Err(NotFound),
         }
     }
+}
+
+pub fn create_rpc_driver(
+    faucet_filename: &str,
+    contract_filename: &str,
+    local_database_filename: &str,
+) -> Result<Driver<TezosRpc>, Box<dyn std::error::Error + Send + Sync + 'static>> {
+    use std::fs::read_to_string;
+
+    // Surprisingly, reading the whole file is faster.
+    // https://github.com/serde-rs/json/issues/160#issuecomment-253446892
+    let faucet_output: faucet::FaucetOutput =
+        serde_json::from_str(&read_to_string(faucet_filename)?)?;
+    let contract_config: contract::ContractConfig =
+        serde_json::from_str(&read_to_string(contract_filename)?)?;
+    let host = contract_config.rpc_host.parse()?;
+    let tezos = TezosRpc::new(
+        contract_config.debug,
+        host,
+        faucet_output.pkh,
+        faucet_output.secret,
+        contract_config.contract_address,
+    );
+    let conn = MizuConnection::connect(local_database_filename)?;
+
+    Ok(Driver::new(conn, tezos))
 }
 
 // ensure test related code (especially migration SQL) is not included in the binary

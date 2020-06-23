@@ -11,9 +11,13 @@ mizu-crypto = { path = "../mizu-crypto" }
 mizu-sqlite = { path = "../mizu-sqlite" }
 mizu-tezos-mock = { path = "../mizu-tezos-mock" }
 mizu-tezos-interface = { path = "../mizu-tezos-interface" }
+mizu-tezos = { path = "../mizu-tezos-rpc" }
 bincode = "1.2.1"
 rustyline = "6.2.0"
 rand = "0.7.3"
 thiserror = "1.0.20"
 diesel = { version = "1.4.5", features = ["chrono", "sqlite"] }
 chrono = "0.4.11"
+serde = "1.0.114"
+serde_json = "1.0.55"
+url = "2.1.1"

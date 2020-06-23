@@ -203,6 +203,22 @@ pub struct TezosRpc {
 }
 
 impl TezosRpc {
+    pub fn new(
+        debug: bool,
+        host: Url,
+        address: String,
+        secret_key: String,
+        contract_address: String,
+    ) -> Self {
+        Self {
+            debug,
+            host,
+            address,
+            secret_key,
+            contract_address,
+        }
+    }
+
     fn resolve_path(&self, path: &str) -> Result<Url> {
         self.host.join(path).map_err(RpcError::UrlParse)
     }
