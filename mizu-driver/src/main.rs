@@ -7,6 +7,8 @@ use mizu_sqlite::MizuConnection;
 use mizu_tezos_interface::Tezos;
 use mizu_tezos_mock::TezosMock;
 use rand::rngs::OsRng;
+use std::path::PathBuf;
+use structopt::StructOpt;
 
 fn uncons(input: &str) -> Option<(&str, &str)> {
     let start = input.find(|c: char| !c.is_whitespace())?;
@@ -193,22 +195,74 @@ fn commands<T: Tezos>(driver: &Driver<T>) -> Command<T> {
     ])
 }
 
-fn main() {
-    let address = std::env::var("TEZOS_ADDRESS").unwrap();
-    let conn = MizuConnection::connect(&std::env::var("MIZU_DB").unwrap()).unwrap();
-    let tezos_db_conn =
-        SqliteConnection::establish(&std::env::var("MIZU_TEZOS_MOCK").unwrap()).unwrap();
-    let tezos = TezosMock::new(&address, &tezos_db_conn);
-    let driver = Driver::new(conn, tezos);
-    let commands = commands(&driver);
+#[derive(StructOpt, Debug)]
+struct MockOpt {
+    address: Option<String>,
+    db_path: Option<String>,
+    mock_db_path: Option<String>,
+}
 
-    let mut rl = rustyline::Editor::<()>::new();
-    while let Ok(line) = rl.readline("> ") {
-        rl.add_history_entry(line.as_str());
-        let line = line.trim();
-        match commands(line) {
-            Ok(()) => {}
-            Err(e) => eprintln!("{:?}", e),
+#[derive(StructOpt, Debug)]
+struct RpcOpt {
+    faucet_output: PathBuf,
+    config: PathBuf,
+    db_path: Option<String>,
+}
+
+#[derive(StructOpt, Debug)]
+enum Opt {
+    Mock(MockOpt),
+    Rpc(RpcOpt),
+}
+
+fn main() {
+    match Opt::from_args() {
+        Opt::Mock(opt) => {
+            let address = opt
+                .address
+                .unwrap_or_else(|| std::env::var("TEZOS_ADDRESS").expect("address not given"));
+            let db_path = opt
+                .db_path
+                .unwrap_or_else(|| std::env::var("MIZU_DB").expect("db_path not given"));
+            let conn = MizuConnection::connect(&db_path)
+                .expect("MizuConnection: failed to establish connection");
+            let mock_db_path = opt.mock_db_path.unwrap_or_else(|| {
+                std::env::var("MIZU_TEZOS_MOCK").expect("mock_db_path not given")
+            });
+            let tezos_db_conn = SqliteConnection::establish(&mock_db_path)
+                .expect("SqliteConnection: failed to establish connection");
+            let tezos = TezosMock::new(&address, &tezos_db_conn);
+            let driver = Driver::new(conn, tezos);
+            let commands = commands(&driver);
+
+            let mut rl = rustyline::Editor::<()>::new();
+            while let Ok(line) = rl.readline("> ") {
+                rl.add_history_entry(line.as_str());
+                let line = line.trim();
+                match commands(line) {
+                    Ok(()) => {}
+                    Err(e) => eprintln!("{:?}", e),
+                }
+            }
+        }
+        Opt::Rpc(opt) => {
+            let db_path = opt
+                .db_path
+                .unwrap_or_else(|| std::env::var("MIZU_DB").expect("db_path not given"));
+            let driver = create_rpc_driver(&opt.faucet_output, &opt.config, &db_path)
+                .expect("rpc driver creation should succeed");
+
+            let commands = commands(&driver);
+
+            let mut rl = rustyline::Editor::<()>::new();
+            while let Ok(line) = rl.readline("> ") {
+                rl.add_history_entry(line.as_str());
+                let line = line.trim();
+                match commands(line) {
+                    Ok(()) => {}
+                    Err(e) => eprintln!("{:?}", e),
+                }
+            }
         }
     }
 }
