@@ -11,3 +11,4 @@ cursive = { version = "0.15.0", default-features = false, features = ["crossterm
 mizu-driver = { path = "../mizu-driver" }
 mizu-sqlite = { path = "../mizu-sqlite" }
 structopt = "0.3.15"
+chrono = "0.4.11"

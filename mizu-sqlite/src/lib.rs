@@ -126,13 +126,20 @@ impl MizuConnection {
         schema::clients::dsl::clients.load::<client::Client>(&self.conn)
     }
 
-    pub fn list_talking_clients(&self, identity_id: i32) -> Result<Vec<contact::ContactWithName>> {
+    pub fn list_talking_clients(&self, identity_id: i32) -> Result<Vec<client::ClientInfo>> {
         use schema::clients::dsl as clients_dsl;
         use schema::contacts::dsl as contacts_dsl;
 
-        schema::clients::table.inner_join(schema::contacts::table)
+        schema::clients::table
+            .inner_join(schema::contacts::table)
             .filter(clients_dsl::identity_id.eq(identity_id))
-            .select((clients_dsl::contact_id, ))
+            .select((
+                contacts_dsl::id,
+                contacts_dsl::address,
+                contacts_dsl::name,
+                clients_dsl::latest_message_timestamp,
+            ))
+            .load::<client::ClientInfo>(&self.conn)
     }
 
     pub fn find_client(&self, identity_id: i32, contact_id: i32) -> Result<Option<client::Client>> {

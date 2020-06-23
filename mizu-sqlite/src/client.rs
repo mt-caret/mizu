@@ -10,7 +10,7 @@ pub struct Client {
 }
 
 #[derive(Queryable)]
-pub struct ClientWithName {
+pub struct ClientInfo {
     pub contact_id: i32,
     pub address: String,
     pub name: String,
