@@ -1,5 +1,6 @@
 use chrono::naive::NaiveDateTime;
-use std::fmt::{Debug, Display};
+use std::error::Error;
+use std::fmt;
 
 #[derive(Debug)]
 pub struct Message {
@@ -15,9 +16,39 @@ pub struct UserData {
     pub pokes: Vec<Vec<u8>>,
 }
 
+struct Boxed<T>(T);
+// One of the most poor parts in Rust :(
+#[derive(Debug)]
+pub struct BoxedError(pub Box<dyn Error + Send + Sync + 'static>);
+
+pub fn into_boxed_error<E: Error + Send + Sync + 'static>(error: E) -> BoxedError {
+    BoxedError(Box::new(error))
+}
+
+impl fmt::Display for BoxedError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl Error for BoxedError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.0.source()
+    }
+}
+
+pub type BoxedTezos<'a> = Box<dyn Tezos<ReadError = BoxedError, WriteError = BoxedError> + 'a>;
+
 pub trait Tezos {
-    type ReadError: Display + Debug;
-    type WriteError: Debug + Display;
+    type ReadError: Error + Send + Sync + 'static;
+    type WriteError: Error + Send + Sync + 'static;
+
+    fn boxed<'a>(self) -> BoxedTezos<'a>
+    where
+        Self: Sized + 'a,
+    {
+        Box::new(Boxed(self))
+    }
 
     // Read
     /// Returns Tezos address.
@@ -106,5 +137,32 @@ impl<T: Tezos> Tezos for std::sync::Arc<T> {
 
     fn register(&self, identity_key: Option<&[u8]>, prekey: &[u8]) -> Result<(), Self::WriteError> {
         (**self).register(identity_key, prekey)
+    }
+}
+
+impl<T: Tezos> Tezos for Boxed<T> {
+    type ReadError = BoxedError;
+    type WriteError = BoxedError;
+
+    fn address(&self) -> &str {
+        self.0.address()
+    }
+
+    fn retrieve_user_data(&self, address: &str) -> Result<Option<UserData>, Self::ReadError> {
+        self.0.retrieve_user_data(address).map_err(into_boxed_error)
+    }
+
+    fn post(&self, add: &[&[u8]], remove: &[&usize]) -> Result<(), Self::WriteError> {
+        self.0.post(add, remove).map_err(into_boxed_error)
+    }
+
+    fn poke(&self, target_address: &str, data: &[u8]) -> Result<(), Self::WriteError> {
+        self.0.poke(target_address, data).map_err(into_boxed_error)
+    }
+
+    fn register(&self, identity_key: Option<&[u8]>, prekey: &[u8]) -> Result<(), Self::WriteError> {
+        self.0
+            .register(identity_key, prekey)
+            .map_err(into_boxed_error)
     }
 }
