@@ -10,6 +10,7 @@ use mizu_tezos_interface::Tezos;
 use rand::{CryptoRng, RngCore};
 use std::convert::TryInto;
 use std::fmt::{Debug, Display};
+use std::path::PathBuf;
 use thiserror::Error;
 
 pub mod contract;
@@ -333,18 +334,18 @@ where
 }
 
 pub fn create_rpc_driver(
-    faucet_filename: &str,
-    contract_filename: &str,
-    local_database_filename: &str,
+    faucet_output: &PathBuf,
+    contract_config: &PathBuf,
+    db_path: &str,
 ) -> Result<Driver<TezosRpc>, Box<dyn std::error::Error + Send + Sync + 'static>> {
     use std::fs::read_to_string;
 
     // Surprisingly, reading the whole file is faster.
     // https://github.com/serde-rs/json/issues/160#issuecomment-253446892
     let faucet_output: faucet::FaucetOutput =
-        serde_json::from_str(&read_to_string(faucet_filename)?)?;
+        serde_json::from_str(&read_to_string(faucet_output)?)?;
     let contract_config: contract::ContractConfig =
-        serde_json::from_str(&read_to_string(contract_filename)?)?;
+        serde_json::from_str(&read_to_string(contract_config)?)?;
     let host = contract_config.rpc_host.parse()?;
     let tezos = TezosRpc::new(
         contract_config.debug,
@@ -353,7 +354,7 @@ pub fn create_rpc_driver(
         faucet_output.secret,
         contract_config.contract_address,
     );
-    let conn = MizuConnection::connect(local_database_filename)?;
+    let conn = MizuConnection::connect(db_path)?;
 
     Ok(Driver::new(conn, tezos))
 }
