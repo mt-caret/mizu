@@ -220,6 +220,20 @@ enum Opt {
     Rpc(RpcOpt),
 }
 
+fn run_cli<T: Tezos>(driver: &Driver<T>) {
+    let commands = commands(&driver);
+
+    let mut rl = rustyline::Editor::<()>::new();
+    while let Ok(line) = rl.readline("> ") {
+        rl.add_history_entry(line.as_str());
+        let line = line.trim();
+        match commands(line) {
+            Ok(()) => {}
+            Err(e) => eprintln!("{:?}", e),
+        }
+    }
+}
+
 fn main() {
     match Opt::from_args() {
         Opt::Mock(opt) => {
@@ -236,38 +250,21 @@ fn main() {
             });
             let tezos_db_conn = SqliteConnection::establish(&mock_db_path)
                 .expect("SqliteConnection: failed to establish connection");
+
             let tezos = TezosMock::new(&address, &tezos_db_conn);
             let driver = Driver::new(conn, tezos);
-            let commands = commands(&driver);
 
-            let mut rl = rustyline::Editor::<()>::new();
-            while let Ok(line) = rl.readline("> ") {
-                rl.add_history_entry(line.as_str());
-                let line = line.trim();
-                match commands(line) {
-                    Ok(()) => {}
-                    Err(e) => eprintln!("{:?}", e),
-                }
-            }
+            run_cli(&driver);
         }
         Opt::Rpc(opt) => {
             let db_path = opt
                 .db_path
                 .unwrap_or_else(|| std::env::var("MIZU_DB").expect("db_path not given"));
+
             let driver = create_rpc_driver(&opt.faucet_output, &opt.config, &db_path)
                 .expect("rpc driver creation should succeed");
 
-            let commands = commands(&driver);
-
-            let mut rl = rustyline::Editor::<()>::new();
-            while let Ok(line) = rl.readline("> ") {
-                rl.add_history_entry(line.as_str());
-                let line = line.trim();
-                match commands(line) {
-                    Ok(()) => {}
-                    Err(e) => eprintln!("{:?}", e),
-                }
-            }
+            run_cli(&driver);
         }
     }
 }
