@@ -540,13 +540,13 @@ fn parse_user_data(expr: &Expr) -> Result<UserData> {
     let postal_box = value["args"][1]["args"][0]
         .as_array()
         .ok_or_else(|| RpcError::UserData("expected array".to_string()))?
-        .into_iter()
+        .iter()
         .map(decode_message)
         .collect::<Result<Vec<_>>>()?;
     let pokes = value["args"][1]["args"][1]
         .as_array()
         .ok_or_else(|| RpcError::UserData("expected array".to_string()))?
-        .into_iter()
+        .iter()
         .map(decode_bytes)
         .collect::<Result<Vec<_>>>()?;
 
