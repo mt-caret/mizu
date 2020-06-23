@@ -512,36 +512,52 @@ pub fn run_mizu_operation(
     Ok(hash)
 }
 
-//fn main() -> Result<()> {
-//    let node_host: Url =
-//        Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
-//    let source = "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB";
-//    let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
-//    let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk";
-//
-//    let parameters = MizuOp::Register(
-//        Some(vec![
-//            0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe,
-//        ]),
-//        vec![
-//            0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe,
-//        ],
-//    );
-//
-//    let hash = run_mizu_operation(
-//        &node_host,
-//        &parameters,
-//        source,
-//        destination,
-//        secret_key,
-//        true,
-//    )?;
-//
-//    println!("hash: {}", hash);
-//
-//    let user_data = get_from_big_map(&node_host, destination, source)?;
-//
-//    println!("user_data: {:?}", user_data);
-//
-//    Ok(())
-//}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // This test writes data out to a contract every time it is run, so
+    // shouldn't be called unnecessarily!
+    #[test]
+    #[ignore]
+    fn contract_call_succeeds() -> Result<()> {
+        let node_host: Url =
+            Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
+        let source = "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB";
+        let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
+        let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk";
+
+        let parameters = MizuOp::Register(
+            Some(vec![
+                0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe,
+            ]),
+            vec![
+                0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe,
+            ],
+        );
+
+        assert!(run_mizu_operation(
+            &node_host,
+            &parameters,
+            source,
+            destination,
+            secret_key,
+            false,
+        )
+        .is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn reads_work() -> Result<()> {
+        let node_host: Url =
+            Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
+        let source = "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB";
+        let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
+
+        assert!(get_from_big_map(&node_host, destination, source).is_ok());
+
+        Ok(())
+    }
+}
