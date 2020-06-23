@@ -1,7 +1,7 @@
 [package]
 name = "mizu-tezos"
 version = "0.1.0"
-authors = ["Masayuki Takeda <mtakeda.enigsol@gmail.com>"]
+authors = ["mt-caret <mtakeda.enigsol@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -29,3 +29,6 @@ digest = "0.9.0"
 # crate does not support signing non-64 byte digests :(
 signatory-ring = "0.20.0"
 signature = "1.1.0"
+
+mizu-tezos-interface = { path = "../mizu-tezos-interface" }
+chrono = "0.4.11"
