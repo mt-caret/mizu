@@ -46,7 +46,7 @@ where
             }
 
             if head.eq_ignore_ascii_case("help") {
-                let keys: Vec<&str> = subcommands.iter().map(|(key, _)| key.clone()).collect();
+                let keys: Vec<&str> = subcommands.iter().map(|(key, _)| *key).collect();
                 println!("available commands: {}", keys.join(", "));
             }
         }
