@@ -95,7 +95,7 @@ where
     ) -> DriverResult<T, ()> {
         let x3dh = X3DHClient::new(rng);
         self.conn
-            .create_identity(name, &x3dh)
+            .create_identity(name, self.tezos.address(), &x3dh)
             .map_err(DriverError::UserData)
     }
 

@@ -20,6 +20,7 @@ table! {
     identities (id) {
         id -> Integer,
         name -> Text,
+        address -> Text,
         x3dh_client -> Binary,
         created_at -> Timestamp,
     }

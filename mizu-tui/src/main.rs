@@ -12,7 +12,7 @@ fn render_identity(identity: &mizu_sqlite::identity::Identity) -> impl View {
     //     tezos_address
     let mut styled = StyledString::plain(format!("{:>3}. ", identity.id));
     styled.append_styled(format!("{}\n", identity.name), Effect::Bold);
-    styled.append(format!("     tz1blabla")); // TODO: store Tezos address in DB
+    styled.append(format!("     {}", identity.address));
     TextView::new(styled)
 }
 
@@ -40,6 +40,7 @@ fn main() {
     let identity = mizu_sqlite::identity::Identity {
         id: 1,
         name: "Alice".into(),
+        address: "tz1alice".into(),
         x3dh_client: vec![],
         created_at: "".into(),
     };

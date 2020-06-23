@@ -161,6 +161,8 @@ impl<T: Tezos> Tezos for Boxed<T> {
     }
 
     fn register(&self, identity_key: Option<&[u8]>, prekey: &[u8]) -> Result<(), Self::WriteError> {
-        self.0.register(identity_key, prekey).map_err(into_boxed_error)
+        self.0
+            .register(identity_key, prekey)
+            .map_err(into_boxed_error)
     }
 }

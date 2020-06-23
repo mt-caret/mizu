@@ -32,10 +32,11 @@ impl MizuConnection {
         })
     }
 
-    pub fn create_identity(&self, name: &str, x3dh: &X3DHClient) -> Result<()> {
+    pub fn create_identity(&self, name: &str, address: &str, x3dh: &X3DHClient) -> Result<()> {
         diesel::insert_into(schema::identities::table)
             .values(&identity::NewIdentity {
                 name,
+                address,
                 x3dh_client: &bincode::serialize(&x3dh).unwrap(),
             })
             .execute(&self.conn)?;
