@@ -1,9 +1,11 @@
+use cursive::align::HAlign;
 use cursive::theme::BaseColor;
 use cursive::theme::Color;
 use cursive::theme::Effect;
 use cursive::theme::Style;
+use cursive::traits::Resizable;
 use cursive::utils::markup::StyledString;
-use cursive::views::{Dialog, DummyView, LinearLayout, TextView};
+use cursive::views::{Dialog, DummyView, LinearLayout, TextArea, TextView};
 use cursive::View;
 use structopt::StructOpt;
 
@@ -31,6 +33,32 @@ fn render_clients<I: Iterator<Item = mizu_sqlite::client::ClientInfo>>(
         }
         styled.append(format!("     {}", client.address));
         TextView::new(styled)
+    })
+}
+
+fn render_messages<I: Iterator<Item = mizu_sqlite::message::Message>>(
+    iter: I,
+) -> impl Iterator<Item = impl View> {
+    // messages from me:
+    // <right align> content
+    //             timestamp
+
+    // messages from the other guy in the conversation:
+    // content   <left align>
+    // timestamp
+
+    iter.map(|message| {
+        let content = format!("{}\n", String::from_utf8_lossy(&message.content));
+        let timestamp = message.created_at.to_string();
+        let mut styled = StyledString::new();
+        styled.append_styled(content, Effect::Bold);
+        styled.append(timestamp);
+
+        TextView::new(styled).h_align(if message.my_message {
+            HAlign::Right
+        } else {
+            HAlign::Left
+        })
     })
 }
 
@@ -65,8 +93,53 @@ fn main() {
         left_view.add_child(view);
     }
 
+    let messages = vec![
+        mizu_sqlite::message::Message {
+            id: 1,
+            identity_id: 1,
+            contact_id: 1,
+            content: b"Hi!"[..].into(),
+            my_message: false,
+            created_at: NaiveDate::from_ymd(1996, 5, 24).and_hms(1, 23, 0),
+        },
+        mizu_sqlite::message::Message {
+            id: 1,
+            identity_id: 1,
+            contact_id: 1,
+            content: b"Hellooooooooo"[..].into(),
+            my_message: false,
+            created_at: NaiveDate::from_ymd(1996, 5, 24).and_hms(1, 23, 13),
+        },
+        mizu_sqlite::message::Message {
+            id: 1,
+            identity_id: 1,
+            contact_id: 1,
+            content: b"Are you here?"[..].into(),
+            my_message: false,
+            created_at: NaiveDate::from_ymd(1996, 5, 24).and_hms(1, 23, 58),
+        },
+        mizu_sqlite::message::Message {
+            id: 1,
+            identity_id: 1,
+            contact_id: 1,
+            content: b"what?"[..].into(),
+            my_message: true,
+            created_at: NaiveDate::from_ymd(1996, 5, 24).and_hms(1, 25, 1),
+        },
+    ];
+    let mut right_view = LinearLayout::vertical();
+    for view in render_messages(messages.into_iter()) {
+        right_view.add_child(view);
+        right_view.add_child(DummyView);
+    }
+    right_view.add_child(TextArea::new());
+
+    let view = LinearLayout::horizontal()
+        .child(left_view)
+        .child(DummyView)
+        .child(right_view.full_screen());
+
     let mut siv = cursive::default();
-    siv.add_global_callback('q', |s| s.quit());
-    siv.add_fullscreen_layer(left_view);
+    siv.add_fullscreen_layer(view);
     siv.run();
 }
