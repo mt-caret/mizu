@@ -10,6 +10,8 @@ use mizu_tezos_interface::Tezos;
 use rand::{CryptoRng, RngCore};
 use std::convert::TryInto;
 use std::fmt::{Debug, Display};
+use std::path::PathBuf;
+use std::rc::Rc;
 use thiserror::Error;
 
 pub mod contract;
@@ -58,7 +60,7 @@ struct TezosData {
 
 // All states needed to run protocols are saved to a SQLite database and retrieved on demand.
 pub struct Driver<T> {
-    conn: MizuConnection,
+    conn: Rc<MizuConnection>,
     tezos: T,
 }
 
@@ -66,7 +68,7 @@ impl<T> Driver<T>
 where
     T: Tezos,
 {
-    pub fn new(conn: MizuConnection, tezos: T) -> Self {
+    pub fn new(conn: Rc<MizuConnection>, tezos: T) -> Self {
         Self { conn, tezos }
     }
 
@@ -338,18 +340,18 @@ where
 }
 
 pub fn create_rpc_driver(
-    faucet_filename: &str,
-    contract_filename: &str,
-    local_database_filename: &str,
+    faucet_output: &PathBuf,
+    contract_config: &PathBuf,
+    db_path: &str,
 ) -> Result<Driver<TezosRpc>, Box<dyn std::error::Error + Send + Sync + 'static>> {
     use std::fs::read_to_string;
 
     // Surprisingly, reading the whole file is faster.
     // https://github.com/serde-rs/json/issues/160#issuecomment-253446892
     let faucet_output: faucet::FaucetOutput =
-        serde_json::from_str(&read_to_string(faucet_filename)?)?;
+        serde_json::from_str(&read_to_string(faucet_output)?)?;
     let contract_config: contract::ContractConfig =
-        serde_json::from_str(&read_to_string(contract_filename)?)?;
+        serde_json::from_str(&read_to_string(contract_config)?)?;
     let host = contract_config.rpc_host.parse()?;
     let tezos = TezosRpc::new(
         contract_config.debug,
@@ -358,7 +360,7 @@ pub fn create_rpc_driver(
         faucet_output.secret,
         contract_config.contract_address,
     );
-    let conn = MizuConnection::connect(local_database_filename)?;
+    let conn = Rc::new(MizuConnection::connect(db_path)?);
 
     Ok(Driver::new(conn, tezos))
 }
@@ -371,15 +373,16 @@ mod test {
     use mizu_sqlite::MizuConnection;
     use mizu_tezos_mock::TezosMock;
     use rand::rngs::OsRng;
+    use std::rc::Rc;
 
-    fn prepare_user_database() -> MizuConnection {
+    fn prepare_user_database() -> Rc<MizuConnection> {
         // Create an in-memory SQLite database
         let conn = SqliteConnection::establish(":memory:").unwrap();
         let migration =
             include_str!("../../mizu-sqlite/migrations/2020-06-16-100417_initial/up.sql");
         conn.batch_execute(migration).unwrap();
 
-        MizuConnection::new(conn)
+        Rc::new(MizuConnection::new(conn))
     }
 
     #[test]
@@ -388,26 +391,26 @@ mod test {
         let alice_address = "alice";
         let bob_address = "bob";
 
-        let mock_conn = {
+        let mock_conn = Rc::new({
             // Create an in-memory SQLite database
             let conn = SqliteConnection::establish(":memory:").unwrap();
             let migration =
                 include_str!("../../mizu-tezos-mock/migrations/2020-06-17-013029_initial/up.sql");
             conn.batch_execute(migration).unwrap();
             conn
-        };
+        });
 
         let mut rng = OsRng;
 
         let alice = {
             let user_database = prepare_user_database();
-            let tezos_mock = TezosMock::new(alice_address, &mock_conn);
+            let tezos_mock = TezosMock::new(alice_address, Rc::clone(&mock_conn));
             Driver::new(user_database, tezos_mock)
         };
         let bob = {
             let user_database = prepare_user_database();
             // use Tezos address
-            let tezos_mock = TezosMock::new(bob_address, &mock_conn);
+            let tezos_mock = TezosMock::new(bob_address, mock_conn);
             Driver::new(user_database, tezos_mock)
         };
 

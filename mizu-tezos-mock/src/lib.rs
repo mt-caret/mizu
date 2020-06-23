@@ -5,6 +5,7 @@ extern crate diesel;
 
 use diesel::prelude::*;
 use mizu_tezos_interface::*;
+use std::rc::Rc;
 
 mod message;
 mod poke;
@@ -26,11 +27,11 @@ type DieselError = diesel::result::Error;
 pub struct TezosMock<'a> {
     /// Tezos address
     address: &'a str,
-    conn: &'a SqliteConnection,
+    conn: Rc<SqliteConnection>,
 }
 
 impl<'a> TezosMock<'a> {
-    pub fn new(address: &'a str, conn: &'a SqliteConnection) -> Self {
+    pub fn new(address: &'a str, conn: Rc<SqliteConnection>) -> Self {
         TezosMock { address, conn }
     }
 
@@ -62,15 +63,15 @@ impl<'a> Tezos for TezosMock<'a> {
 
         if let Some(user) = users_dsl::users
             .filter(users_dsl::address.eq(address))
-            .first::<user::User>(self.conn)
+            .first::<user::User>(&*self.conn)
             .optional()?
         {
             let messages = message::Message::belonging_to(&user)
                 .order(messages_dsl::id.asc())
-                .load::<message::Message>(self.conn)?;
+                .load::<message::Message>(&*self.conn)?;
             let pokes = poke::Poke::belonging_to(&user)
                 .order(pokes_dsl::id.asc())
-                .load::<poke::Poke>(self.conn)?;
+                .load::<poke::Poke>(&*self.conn)?;
 
             Ok(Some(UserData {
                 identity_key: user.identity_key,
@@ -97,16 +98,16 @@ impl<'a> Tezos for TezosMock<'a> {
         // First, retrieve all our posts to determine ones to be removed.
         let user = users_dsl::users
             .filter(users_dsl::address.eq(self.address))
-            .first::<user::User>(self.conn)?;
+            .first::<user::User>(&*self.conn)?;
         let messages = message::Message::belonging_to(&user)
             .order(messages_dsl::id.asc())
-            .load::<message::Message>(self.conn)?;
+            .load::<message::Message>(&*self.conn)?;
         // TODO: return an error if the index is out of bounds (panics now).
         let remove: Vec<i32> = remove.iter().map(|i| messages[**i].id).collect();
 
         // Next, remove the corresponding messages.
         diesel::delete(messages_dsl::messages.filter(messages_dsl::id.eq_any(&remove)))
-            .execute(self.conn)?;
+            .execute(&*self.conn)?;
 
         // Finally, add messages.
         let new_messages: Vec<_> = add
@@ -122,7 +123,7 @@ impl<'a> Tezos for TezosMock<'a> {
         }
         diesel::insert_into(schema::messages::table)
             .values(&new_messages)
-            .execute(self.conn)?;
+            .execute(&*self.conn)?;
 
         Ok(())
     }
@@ -133,14 +134,14 @@ impl<'a> Tezos for TezosMock<'a> {
         let user_id = dsl::users
             .filter(dsl::address.eq(target_address))
             .select(dsl::id)
-            .first::<i32>(self.conn)?;
+            .first::<i32>(&*self.conn)?;
 
         diesel::insert_into(schema::pokes::table)
             .values(&poke::NewPoke {
                 user_id,
                 content: data,
             })
-            .execute(self.conn)?;
+            .execute(&*self.conn)?;
 
         Ok(())
     }
@@ -155,7 +156,7 @@ impl<'a> Tezos for TezosMock<'a> {
                 diesel::update(dsl::users.filter(dsl::address.eq(self.address)))
                     .set(dsl::prekey.eq(prekey))
             )
-            .execute(self.conn)?,
+            .execute(&*self.conn)?,
             Some(identity_key) => {
                 // As our schema declares address column to be unique, this query
                 // - updates identity_key and prekey if the address already exists; or
@@ -165,7 +166,7 @@ impl<'a> Tezos for TezosMock<'a> {
                     identity_key,
                     prekey,
                 }))
-                .execute(self.conn)?
+                .execute(&*self.conn)?
             }
         };
 
