@@ -44,6 +44,11 @@ where
                     return f(rest);
                 }
             }
+
+            if head.eq_ignore_ascii_case("help") {
+                let keys: Vec<&str> = subcommands.iter().map(|(key, _)| key.clone()).collect();
+                println!("available commands: {}", keys.join(", "));
+            }
         }
 
         Err(DriverError::NotFound)
