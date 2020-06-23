@@ -1,6 +1,6 @@
-mod crypto;
+pub mod crypto;
 mod helper;
-mod michelson;
+pub mod michelson;
 
 use michelson::Expr;
 use num_bigint::{BigInt, BigUint};
@@ -14,7 +14,7 @@ use url::Url;
 static PROTOCOL_CARTHAGE: &str = "PsCARTHAGazKbHtnKfLzQg3kms52kSRpgnDY982a9oYsSXRLQEb";
 
 #[derive(Error, Debug)]
-enum TezosError {
+pub enum TezosError {
     #[error("failed to parse url: {0}")]
     UrlParse(url::ParseError),
     #[error("error: {0}")]
@@ -304,7 +304,7 @@ fn inject_operation(host: &Url, signed_sop: &str) -> Result<String> {
         .and_then(|x| from_value(&x))
 }
 
-fn get_from_big_map(host: &Url, contract_address: &str, key: &str) -> Result<Expr> {
+pub fn get_from_big_map(host: &Url, contract_address: &str, key: &str) -> Result<Expr> {
     let url = host
         .join(
             &[
@@ -332,16 +332,15 @@ fn get_from_big_map(host: &Url, contract_address: &str, key: &str) -> Result<Exp
 }
 
 // TODO: test remaining enums
-#[allow(dead_code)]
 #[derive(Debug)]
-enum MizuOp {
+pub enum MizuOp {
     Post(Vec<Vec<u8>>, Vec<BigInt>),
     Poke(String, Vec<u8>),
     Register(Option<Vec<u8>>, Vec<u8>),
 }
 
 impl MizuOp {
-    fn to_expr(&self) -> Expr {
+    pub fn to_expr(&self) -> Expr {
         match self {
             MizuOp::Post(add, remove) => Expr::left(Expr::pair(
                 Expr::List(add.iter().cloned().map(Expr::Bytes).collect()),
@@ -394,7 +393,7 @@ fn serialize_and_set_fee(host: &Url, op: &mut Operation, debug: bool) -> Result<
 // Code here was written based on the following sources:
 // - https://www.ocamlpro.com/2018/11/15/an-introduction-to-tezos-rpcs-a-basic-wallet/
 // - https://medium.com/chain-accelerator/how-to-use-tezos-rpcs-16c362f45d64
-fn run_mizu_operation(
+pub fn run_mizu_operation(
     host: &Url,
     parameters: &MizuOp,
     source: &str,
@@ -513,42 +512,42 @@ fn run_mizu_operation(
     Ok(hash)
 }
 
-fn main() -> Result<()> {
-    //let address = crypto::derive_address_from_pubkey(
-    //    "edpkuwY2nMXEdzhKd9PxsBfX4ZxZ78w2yoTbEN6yfq5HCGx1MnxDdj",
-    //)
-    //.map_err(TezosError::Crypto)?;
-    //assert_eq!(address, "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB");
-
-    let node_host: Url =
-        Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
-    let source = "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB";
-    let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
-    let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk";
-
-    let parameters = MizuOp::Register(
-        Some(vec![
-            0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe,
-        ]),
-        vec![
-            0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe,
-        ],
-    );
-
-    let hash = run_mizu_operation(
-        &node_host,
-        &parameters,
-        source,
-        destination,
-        secret_key,
-        true,
-    )?;
-
-    println!("hash: {}", hash);
-
-    let user_data = get_from_big_map(&node_host, destination, source)?;
-
-    println!("user_data: {:?}", user_data);
-
-    Ok(())
-}
+//fn main() -> Result<()> {
+//    //let address = crypto::derive_address_from_pubkey(
+//    //    "edpkuwY2nMXEdzhKd9PxsBfX4ZxZ78w2yoTbEN6yfq5HCGx1MnxDdj",
+//    //)
+//    //.map_err(TezosError::Crypto)?;
+//    //assert_eq!(address, "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB");
+//
+//    let node_host: Url =
+//        Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
+//    let source = "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB";
+//    let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
+//    let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk";
+//
+//    let parameters = MizuOp::Register(
+//        Some(vec![
+//            0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe,
+//        ]),
+//        vec![
+//            0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe, 0xca, 0xfe, 0xba, 0xbe,
+//        ],
+//    );
+//
+//    let hash = run_mizu_operation(
+//        &node_host,
+//        &parameters,
+//        source,
+//        destination,
+//        secret_key,
+//        true,
+//    )?;
+//
+//    println!("hash: {}", hash);
+//
+//    let user_data = get_from_big_map(&node_host, destination, source)?;
+//
+//    println!("user_data: {:?}", user_data);
+//
+//    Ok(())
+//}

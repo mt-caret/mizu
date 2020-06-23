@@ -29,7 +29,6 @@ fn base58check_encode(input: &[u8]) -> String {
 }
 
 // TODO: test this when turning this into a library later
-#[allow(dead_code)]
 pub fn derive_address_from_pubkey(public_key: &str) -> Result<String, Error> {
     if &public_key[0..4] != "edpk" {
         return Err(Error::KeyType);
