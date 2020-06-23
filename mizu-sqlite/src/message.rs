@@ -6,6 +6,7 @@ pub struct Message {
     pub identity_id: i32,
     pub contact_id: i32,
     pub content: Vec<u8>,
+    pub my_message: bool,
     pub created_at: String,
 }
 
@@ -15,4 +16,5 @@ pub struct NewMessage<'a> {
     pub identity_id: i32,
     pub contact_id: i32,
     pub content: &'a [u8],
+    pub my_message: bool,
 }
