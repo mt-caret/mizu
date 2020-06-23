@@ -74,3 +74,28 @@ pub fn sign_serialized_operation(
         signature.to_vec(),
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn derive_address_from_pubkey_works() -> Result<(), Error> {
+        let address =
+            derive_address_from_pubkey("edpkuwY2nMXEdzhKd9PxsBfX4ZxZ78w2yoTbEN6yfq5HCGx1MnxDdj")?;
+        assert_eq!(address, "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB");
+        Ok(())
+    }
+
+    #[test]
+    fn sign_serialized_operation_works() -> Result<(), Error> {
+        let sop = "ce69c5713dac3537254e7be59759cf59c15abd530d10501ccf9028a5786314cf08000002298c03ed7d454a101eb7022bc95f7e5f41ac78d0860303c8010080c2d72f0000e7670f32038107a59a2b9cfefae36ea21f5aa63c00";
+        let secret_key = "edsk3gUfUPyBSfrS9CCgmCiQsTCHGkviBDusMxDJstFtojtc1zcpsh";
+        let (signature, raw_signature) = sign_serialized_operation(sop, secret_key)?;
+        assert_eq!(signature,
+            "edsigtkpiSSschcaCt9pUVrpNPf7TTcgvgDEDD6NCEHMy8NNQJCGnMfLZzYoQj74yLjo9wx6MPVV29CvVzgi7qEcEUok3k7AuMg");
+        assert_eq!(hex::encode(raw_signature),
+            "637e08251cae646a42e6eb8bea86ece5256cf777c52bc474b73ec476ee1d70e84c6ba21276d41bc212e4d878615f4a31323d39959e07539bc066b84174a8ff0d");
+        Ok(())
+    }
+}
