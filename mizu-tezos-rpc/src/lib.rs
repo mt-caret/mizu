@@ -37,18 +37,6 @@ struct Bootstrapped {
     timestamp: String,
 }
 
-fn bootstrapped(host: &Url) -> Result<Bootstrapped> {
-    let url = host
-        .join("monitor/bootstrapped")
-        .map_err(TezosError::UrlParse)?;
-
-    ureq::get(url.as_str())
-        .call()
-        .into_json()
-        .map_err(TezosError::IO)
-        .and_then(|x| from_value(&x))
-}
-
 #[derive(Deserialize, Debug)]
 struct Constants {
     proof_of_work_nonce_size: u8,
@@ -98,64 +86,8 @@ struct Constants {
     delay_per_missing_endorsement: i64,
 }
 
-fn constants(host: &Url) -> Result<Constants> {
-    let url = host
-        .join("chains/main/blocks/head/context/constants")
-        .map_err(TezosError::UrlParse)?;
-
-    ureq::get(url.as_str())
-        .call()
-        .into_json()
-        .map_err(TezosError::IO)
-        .and_then(|x| from_value(&x))
-}
-
-fn head_hash(host: &Url) -> Result<String> {
-    let url = host
-        .join("chains/main/blocks/head/hash")
-        .map_err(TezosError::UrlParse)?;
-
-    ureq::get(url.as_str())
-        .call()
-        .into_json()
-        .map_err(TezosError::IO)
-        .and_then(|x| from_value(&x))
-}
-
-fn chain_id(host: &Url) -> Result<String> {
-    let url = host
-        .join("chains/main/chain_id")
-        .map_err(TezosError::UrlParse)?;
-
-    ureq::get(url.as_str())
-        .call()
-        .into_json()
-        .map_err(TezosError::IO)
-        .and_then(|x| from_value(&x))
-}
-
 fn parse_bigint(s: String) -> Result<BigInt> {
     s.parse::<BigInt>().map_err(TezosError::DeserializeBigInt)
-}
-
-fn counter(host: &Url, address: &str) -> Result<BigInt> {
-    let url = host
-        .join(
-            &[
-                "chains/main/blocks/head/context/contracts/",
-                address,
-                "/counter",
-            ]
-            .concat(),
-        )
-        .map_err(TezosError::UrlParse)?;
-
-    let s: String = ureq::get(url.as_str())
-        .call()
-        .into_json()
-        .map_err(TezosError::IO)
-        .and_then(|x| from_value(&x))?;
-    parse_bigint(s)
 }
 
 #[derive(Debug)]
@@ -211,20 +143,6 @@ fn build_json(op: &Operation) -> Value {
     value
 }
 
-fn serialize_operation(host: &Url, op: &Operation) -> Result<String> {
-    let url = host
-        .join("chains/main/blocks/head/helpers/forge/operations")
-        .map_err(TezosError::UrlParse)?;
-
-    let payload = build_json(op);
-
-    ureq::post(url.as_str())
-        .send_json(payload)
-        .into_json()
-        .map_err(TezosError::IO)
-        .and_then(|x| from_value(&x))
-}
-
 #[derive(Debug)]
 struct DryRunResult {
     consumed_gas: BigInt,
@@ -241,94 +159,6 @@ where
 
 fn deserialize_bigint_from_value(value: &Value) -> Result<BigInt> {
     from_value(value).and_then(parse_bigint)
-}
-
-fn dry_run_contract(host: &Url, op: &Operation, chain_id: &str) -> Result<DryRunResult> {
-    let url = host
-        .join("chains/main/blocks/head/helpers/scripts/run_operation")
-        .map_err(TezosError::UrlParse)?;
-
-    let payload = serde_json::json!(
-        { "operation": build_json(op)
-        , "chain_id": chain_id
-        }
-    );
-
-    let result: Value = ureq::post(url.as_str())
-        .send_json(payload)
-        .into_json()
-        .map_err(TezosError::IO)
-        .and_then(|x| from_value(&x))?;
-
-    let op_result = &result["contents"][0]["metadata"]["operation_result"];
-    let consumed_gas = op_result
-        .get("consumed_gas")
-        .map(deserialize_bigint_from_value)
-        .unwrap_or_else(|| Ok(Zero::zero()))?;
-    let paid_storage_size_diff = op_result
-        .get("paid_storage_size_diff")
-        .map(deserialize_bigint_from_value)
-        .unwrap_or_else(|| Ok(Zero::zero()))?;
-
-    Ok(DryRunResult {
-        consumed_gas,
-        paid_storage_size_diff,
-    })
-}
-
-fn preapply_operation(host: &Url, op: &Operation) -> Result<Value> {
-    let url = host
-        .join("chains/main/blocks/head/helpers/preapply/operations")
-        .map_err(TezosError::UrlParse)?;
-
-    let payload = serde_json::json!(vec![build_json(op)]);
-
-    ureq::post(url.as_str())
-        .send_json(payload)
-        .into_json()
-        .map_err(TezosError::IO)
-        .and_then(|x| from_value(&x))
-}
-
-fn inject_operation(host: &Url, signed_sop: &str) -> Result<String> {
-    let url = host
-        .join("injection/operation?chain=main")
-        .map_err(TezosError::UrlParse)?;
-
-    let payload = serde_json::json!(signed_sop);
-
-    ureq::post(url.as_str())
-        .send_json(payload)
-        .into_json()
-        .map_err(TezosError::IO)
-        .and_then(|x| from_value(&x))
-}
-
-pub fn get_from_big_map(host: &Url, contract_address: &str, key: &str) -> Result<Expr> {
-    let url = host
-        .join(
-            &[
-                "chains/main/blocks/head/context/contracts/",
-                contract_address,
-                "/big_map_get",
-            ]
-            .concat(),
-        )
-        .map_err(TezosError::UrlParse)?;
-
-    let payload = serde_json::json!(
-    { "key": Expr::String(key.to_string())
-    , "type": Expr::Prim {
-            prim: "address".to_string(),
-            args: Vec::new()
-        }
-    });
-
-    ureq::post(url.as_str())
-        .send_json(payload)
-        .into_json()
-        .map_err(TezosError::IO)
-        .and_then(|x| from_value(&x))
 }
 
 // TODO: test remaining enums
@@ -358,174 +188,341 @@ impl MizuOp {
     }
 }
 
-fn serialize_and_set_fee(host: &Url, op: &mut Operation, debug: bool) -> Result<String> {
-    let sop = serialize_operation(&host, &op)?;
-
-    if debug {
-        eprintln!("serialized_operation: {}", &sop);
-    }
-
-    // sop is hex-encoded so we divide by 2 and add 64 bytes for the appended signature.
-    let op_byte_length = sop.len() / 2 + 64;
-
-    // currently hardcoded, since it seems we can't get these values programmatically:
-    // https://gitlab.com/tezos/tezos/-/issues/425
-    let minimal_fees = 100;
-    let minimal_nanotez_per_gas_unit = 100;
-    let minimal_nanotez_per_byte = 1000;
-
-    let total_fee = (minimal_fees * 1000
-        + minimal_nanotez_per_byte * op_byte_length
-        + minimal_nanotez_per_gas_unit * op.gas_limit.clone())
-        / 1000;
-
-    if op.fee <= total_fee {
-        op.fee = total_fee + 1;
-        if debug {
-            eprintln!("fee set to {}", op.fee);
-        }
-        serialize_and_set_fee(host, op, debug)
-    } else {
-        Ok(sop)
-    }
+#[derive(Debug)]
+pub struct TezosRpc {
+    debug: bool,
+    host: Url,
+    address: String,
+    secret_key: String,
+    contract_address: String,
+    //    /// Tezos address
+    //    address: &'a str,
+    //    conn: &'a SqliteConnection,
 }
 
-// Code here was written based on the following sources:
-// - https://www.ocamlpro.com/2018/11/15/an-introduction-to-tezos-rpcs-a-basic-wallet/
-// - https://medium.com/chain-accelerator/how-to-use-tezos-rpcs-16c362f45d64
-pub fn run_mizu_operation(
-    host: &Url,
-    parameters: &MizuOp,
-    source: &str,
-    destination: &str,
-    secret_key: &str,
-    debug: bool,
-) -> Result<String> {
-    let parameters = parameters.to_expr();
-    let s = serde_json::to_string(&parameters).expect("serde should deserialize any MizuOp");
-    if debug {
-        eprintln!("{}", s);
-        eprintln!("{:?}", serde_json::from_str::<michelson::Expr>(&s));
+impl TezosRpc {
+    fn resolve_path(&self, path: &str) -> Result<Url> {
+        self.host.join(path).map_err(TezosError::UrlParse)
     }
 
-    let counter = counter(&host, &source)? + 1;
+    fn bootstrapped(&self) -> Result<Bootstrapped> {
+        let url = self.resolve_path("monitor/bootstrapped")?;
 
-    if debug {
-        eprintln!("counter: {}", counter);
+        ureq::get(url.as_str())
+            .call()
+            .into_json()
+            .map_err(TezosError::IO)
+            .and_then(|x| from_value(&x))
     }
 
-    let bootstrapped = bootstrapped(&host)?;
+    fn constants(&self) -> Result<Constants> {
+        let url = self.resolve_path("chains/main/blocks/head/context/constants")?;
 
-    if debug {
-        eprintln!("bootstrapped: {:?}", bootstrapped);
+        ureq::get(url.as_str())
+            .call()
+            .into_json()
+            .map_err(TezosError::IO)
+            .and_then(|x| from_value(&x))
     }
 
-    let constants = constants(&host)?;
+    fn head_hash(&self) -> Result<String> {
+        let url = self.resolve_path("chains/main/blocks/head/hash")?;
 
-    if debug {
-        eprintln!("constants: {:?}", constants);
+        ureq::get(url.as_str())
+            .call()
+            .into_json()
+            .map_err(TezosError::IO)
+            .and_then(|x| from_value(&x))
     }
 
-    let branch = head_hash(&host)?;
+    fn chain_id(&self) -> Result<String> {
+        let url = self.resolve_path("chains/main/chain_id")?;
 
-    if debug {
-        eprintln!("head hash: {}", branch);
+        ureq::get(url.as_str())
+            .call()
+            .into_json()
+            .map_err(TezosError::IO)
+            .and_then(|x| from_value(&x))
     }
 
-    let chain_id = chain_id(&host)?;
+    fn counter(&self) -> Result<BigInt> {
+        let url = self.resolve_path(
+            &[
+                "chains/main/blocks/head/context/contracts/",
+                &self.address,
+                "/counter",
+            ]
+            .concat(),
+        )?;
 
-    if debug {
-        eprintln!("chain_id: {}", chain_id);
+        let s: String = ureq::get(url.as_str())
+            .call()
+            .into_json()
+            .map_err(TezosError::IO)
+            .and_then(|x| from_value(&x))?;
+        parse_bigint(s)
     }
 
-    let mut op = Operation {
-        branch,
-        source: source.to_string(),
-        counter,
-        fee: Zero::zero(),
-        gas_limit: constants.hard_gas_limit_per_operation,
-        storage_limit: constants.hard_storage_limit_per_operation,
-        destination: destination.to_string(),
-        parameters,
-        protocol: None,
-        signature: None,
-    };
+    fn serialize_operation(&self, op: &Operation) -> Result<String> {
+        let url = self.resolve_path("chains/main/blocks/head/helpers/forge/operations")?;
 
-    let (dummy_signature, _) =
-        crypto::sign_serialized_operation(&serialize_operation(&host, &op)?, &secret_key)
+        let payload = build_json(op);
+
+        ureq::post(url.as_str())
+            .send_json(payload)
+            .into_json()
+            .map_err(TezosError::IO)
+            .and_then(|x| from_value(&x))
+    }
+
+    fn dry_run_contract(&self, op: &Operation, chain_id: &str) -> Result<DryRunResult> {
+        let url = self.resolve_path("chains/main/blocks/head/helpers/scripts/run_operation")?;
+
+        let payload = serde_json::json!(
+            { "operation": build_json(op)
+            , "chain_id": chain_id
+            }
+        );
+
+        let result: Value = ureq::post(url.as_str())
+            .send_json(payload)
+            .into_json()
+            .map_err(TezosError::IO)
+            .and_then(|x| from_value(&x))?;
+
+        let op_result = &result["contents"][0]["metadata"]["operation_result"];
+        let consumed_gas = op_result
+            .get("consumed_gas")
+            .map(deserialize_bigint_from_value)
+            .unwrap_or_else(|| Ok(Zero::zero()))?;
+        let paid_storage_size_diff = op_result
+            .get("paid_storage_size_diff")
+            .map(deserialize_bigint_from_value)
+            .unwrap_or_else(|| Ok(Zero::zero()))?;
+
+        Ok(DryRunResult {
+            consumed_gas,
+            paid_storage_size_diff,
+        })
+    }
+
+    fn preapply_operation(&self, op: &Operation) -> Result<Value> {
+        let url = self.resolve_path("chains/main/blocks/head/helpers/preapply/operations")?;
+
+        let payload = serde_json::json!(vec![build_json(op)]);
+
+        ureq::post(url.as_str())
+            .send_json(payload)
+            .into_json()
+            .map_err(TezosError::IO)
+            .and_then(|x| from_value(&x))
+    }
+
+    fn inject_operation(&self, signed_sop: &str) -> Result<String> {
+        let url = self.resolve_path("injection/operation?chain=main")?;
+
+        let payload = serde_json::json!(signed_sop);
+
+        ureq::post(url.as_str())
+            .send_json(payload)
+            .into_json()
+            .map_err(TezosError::IO)
+            .and_then(|x| from_value(&x))
+    }
+
+    pub fn get_from_big_map(&self, key: &str) -> Result<Expr> {
+        let url = self.resolve_path(
+            &[
+                "chains/main/blocks/head/context/contracts/",
+                &self.contract_address,
+                "/big_map_get",
+            ]
+            .concat(),
+        )?;
+
+        let payload = serde_json::json!(
+        { "key": Expr::String(key.to_string())
+        , "type": Expr::Prim {
+                prim: "address".to_string(),
+                args: Vec::new()
+            }
+        });
+
+        ureq::post(url.as_str())
+            .send_json(payload)
+            .into_json()
+            .map_err(TezosError::IO)
+            .and_then(|x| from_value(&x))
+    }
+
+    fn serialize_and_set_fee(&self, op: &mut Operation) -> Result<String> {
+        let sop = self.serialize_operation(&op)?;
+
+        if self.debug {
+            eprintln!("serialized_operation: {}", &sop);
+        }
+
+        // sop is hex-encoded so we divide by 2 and add 64 bytes for the appended signature.
+        let op_byte_length = sop.len() / 2 + 64;
+
+        // currently hardcoded, since it seems we can't get these values programmatically:
+        // https://gitlab.com/tezos/tezos/-/issues/425
+        let minimal_fees = 100;
+        let minimal_nanotez_per_gas_unit = 100;
+        let minimal_nanotez_per_byte = 1000;
+
+        let total_fee = (minimal_fees * 1000
+            + minimal_nanotez_per_byte * op_byte_length
+            + minimal_nanotez_per_gas_unit * op.gas_limit.clone())
+            / 1000;
+
+        if op.fee <= total_fee {
+            op.fee = total_fee + 1;
+            if self.debug {
+                eprintln!("fee set to {}", op.fee);
+            }
+            self.serialize_and_set_fee(op)
+        } else {
+            Ok(sop)
+        }
+    }
+
+    // Code here was written based on the following sources:
+    // - https://www.ocamlpro.com/2018/11/15/an-introduction-to-tezos-rpcs-a-basic-wallet/
+    // - https://medium.com/chain-accelerator/how-to-use-tezos-rpcs-16c362f45d64
+    pub fn run_mizu_operation(&self, parameters: &MizuOp) -> Result<String> {
+        let parameters = parameters.to_expr();
+        let s = serde_json::to_string(&parameters).expect("serde should deserialize any MizuOp");
+        if self.debug {
+            eprintln!("{}", s);
+            eprintln!("{:?}", serde_json::from_str::<michelson::Expr>(&s));
+        }
+
+        let counter = self.counter()? + 1;
+
+        if self.debug {
+            eprintln!("counter: {}", counter);
+        }
+
+        let bootstrapped = self.bootstrapped()?;
+
+        if self.debug {
+            eprintln!("bootstrapped: {:?}", bootstrapped);
+        }
+
+        let constants = self.constants()?;
+
+        if self.debug {
+            eprintln!("constants: {:?}", constants);
+        }
+
+        let branch = self.head_hash()?;
+
+        if self.debug {
+            eprintln!("head hash: {}", branch);
+        }
+
+        let chain_id = self.chain_id()?;
+
+        if self.debug {
+            eprintln!("chain_id: {}", chain_id);
+        }
+
+        let mut op = Operation {
+            branch,
+            source: self.address.to_string(),
+            counter,
+            fee: Zero::zero(),
+            gas_limit: constants.hard_gas_limit_per_operation,
+            storage_limit: constants.hard_storage_limit_per_operation,
+            destination: self.contract_address.to_string(),
+            parameters,
+            protocol: None,
+            signature: None,
+        };
+
+        let (dummy_signature, _) =
+            crypto::sign_serialized_operation(&self.serialize_operation(&op)?, &self.secret_key)
+                .map_err(TezosError::Crypto)?;
+
+        op.signature = Some(dummy_signature);
+
+        let dry_run_result = self.dry_run_contract(&op, &chain_id)?;
+
+        if self.debug {
+            eprintln!("consumed_gas: {}", dry_run_result.consumed_gas);
+            eprintln!(
+                "paid_storage_size_diff: {}",
+                dry_run_result.paid_storage_size_diff
+            );
+        }
+
+        op.gas_limit = dry_run_result.consumed_gas + 100;
+        op.storage_limit = dry_run_result.paid_storage_size_diff + 20;
+        op.signature = None;
+
+        let sop = self.serialize_and_set_fee(&mut op)?;
+
+        let (signature, raw_signature) = crypto::sign_serialized_operation(&sop, &self.secret_key)
             .map_err(TezosError::Crypto)?;
 
-    op.signature = Some(dummy_signature);
+        if self.debug {
+            eprintln!("signature: {}", signature);
+            eprintln!("raw_signature length: {}", raw_signature.len()); // 64
+        }
 
-    let dry_run_result = dry_run_contract(&host, &op, &chain_id)?;
+        op.protocol = Some(PROTOCOL_CARTHAGE.to_string());
+        op.signature = Some(signature);
 
-    if debug {
-        eprintln!("consumed_gas: {}", dry_run_result.consumed_gas);
-        eprintln!(
-            "paid_storage_size_diff: {}",
-            dry_run_result.paid_storage_size_diff
-        );
+        let preapply_result = self.preapply_operation(&op)?;
+
+        if preapply_result[0].get("id").is_some() {
+            // some error occurred
+            eprintln!("preapply error: {}", preapply_result);
+
+            return Err(TezosError::Rpc(preapply_result));
+        }
+
+        if self.debug {
+            eprintln!("preapply_result: {}", preapply_result);
+        }
+
+        let signed_sop = [sop, hex::encode(raw_signature)].concat();
+
+        if self.debug {
+            eprintln!("signed_sop: {}", signed_sop);
+        }
+
+        let hash = self.inject_operation(&signed_sop)?;
+
+        if self.debug {
+            eprintln!("operation hash: {}", hash);
+        }
+
+        Ok(hash)
     }
-
-    op.gas_limit = dry_run_result.consumed_gas + 100;
-    op.storage_limit = dry_run_result.paid_storage_size_diff + 20;
-    op.signature = None;
-
-    let sop = serialize_and_set_fee(&host, &mut op, debug)?;
-
-    let (signature, raw_signature) =
-        crypto::sign_serialized_operation(&sop, &secret_key).map_err(TezosError::Crypto)?;
-
-    if debug {
-        eprintln!("signature: {}", signature);
-        eprintln!("raw_signature length: {}", raw_signature.len()); // 64
-    }
-
-    op.protocol = Some(PROTOCOL_CARTHAGE.to_string());
-    op.signature = Some(signature);
-
-    let preapply_result = preapply_operation(&host, &op)?;
-
-    if preapply_result[0].get("id").is_some() {
-        // some error occurred
-        eprintln!("preapply error: {}", preapply_result);
-
-        return Err(TezosError::Rpc(preapply_result));
-    }
-
-    if debug {
-        eprintln!("preapply_result: {}", preapply_result);
-    }
-
-    let signed_sop = [sop, hex::encode(raw_signature)].concat();
-
-    if debug {
-        eprintln!("signed_sop: {}", signed_sop);
-    }
-
-    let hash = inject_operation(&host, &signed_sop)?;
-
-    if debug {
-        eprintln!("operation hash: {}", hash);
-    }
-
-    Ok(hash)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn get_tezos_rpc() -> Result<TezosRpc> {
+        Ok(TezosRpc {
+            debug: false,
+            host: Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?,
+            address: "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB".to_string(),
+            secret_key: "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk".to_string(),
+            contract_address: "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk".to_string(),
+        })
+    }
+
     // This test writes data out to a contract every time it is run, so
     // shouldn't be called unnecessarily!
     #[test]
     #[ignore]
     fn contract_call_succeeds() -> Result<()> {
-        let node_host: Url =
-            Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
-        let source = "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB";
-        let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
-        let secret_key = "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk";
+        let rpc = get_tezos_rpc()?;
 
         let parameters = MizuOp::Register(
             Some(vec![
@@ -536,27 +533,16 @@ mod tests {
             ],
         );
 
-        assert!(run_mizu_operation(
-            &node_host,
-            &parameters,
-            source,
-            destination,
-            secret_key,
-            false,
-        )
-        .is_ok());
+        assert!(rpc.run_mizu_operation(&parameters).is_ok());
 
         Ok(())
     }
 
     #[test]
     fn reads_work() -> Result<()> {
-        let node_host: Url =
-            Url::parse("https://carthagenet.smartpy.io").map_err(TezosError::UrlParse)?;
-        let source = "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB";
-        let destination = "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk";
+        let rpc = get_tezos_rpc()?;
 
-        assert!(get_from_big_map(&node_host, destination, source).is_ok());
+        assert!(rpc.get_from_big_map(&rpc.address).is_ok());
 
         Ok(())
     }
