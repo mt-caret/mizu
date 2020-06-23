@@ -238,6 +238,11 @@ where
                 let payload = serialize(&message).unwrap();
                 self.tezos.post(&[&payload], &[]).map_err(TezosWrite)?;
 
+                // Save the sent message.
+                self.conn
+                    .create_message(our_identity_id, their_contact_id, &payload, true)
+                    .map_err(UserData)?;
+
                 // Save the incremented Client.
                 self.conn
                     .upsert_client(
@@ -301,7 +306,7 @@ where
                     let message = deserialize(&message.content).map_err(InvalidMessage)?;
                     if let Ok(message) = client.attempt_message_decryption(rng, message) {
                         self.conn
-                            .create_message(our_identity_id, their_contact_id, &message)
+                            .create_message(our_identity_id, their_contact_id, &message, false)
                             .map_err(UserData)?;
                         messages.push(message);
                     }

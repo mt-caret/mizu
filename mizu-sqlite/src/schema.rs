@@ -31,6 +31,7 @@ table! {
         identity_id -> Integer,
         contact_id -> Integer,
         content -> Binary,
+        my_message -> Bool,
         created_at -> Timestamp,
     }
 }
