@@ -7,4 +7,5 @@ members = [
     "mizu-tezos-rpc",
     "mizu-tezos-mock",
     "mizu-driver",
+    "mizu-tui",
 ]
