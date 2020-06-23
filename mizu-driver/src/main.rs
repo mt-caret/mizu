@@ -8,6 +8,7 @@ use mizu_tezos_interface::Tezos;
 use mizu_tezos_mock::TezosMock;
 use rand::rngs::OsRng;
 use std::path::PathBuf;
+use std::rc::Rc;
 use structopt::StructOpt;
 
 fn uncons(input: &str) -> Option<(&str, &str)> {
@@ -243,15 +244,19 @@ fn main() {
             let db_path = opt
                 .db_path
                 .unwrap_or_else(|| std::env::var("MIZU_DB").expect("db_path not given"));
-            let conn = MizuConnection::connect(&db_path)
-                .expect("MizuConnection: failed to establish connection");
+            let conn = Rc::new(
+                MizuConnection::connect(&db_path)
+                    .expect("MizuConnection: failed to establish connection"),
+            );
             let mock_db_path = opt.mock_db_path.unwrap_or_else(|| {
                 std::env::var("MIZU_TEZOS_MOCK").expect("mock_db_path not given")
             });
-            let tezos_db_conn = SqliteConnection::establish(&mock_db_path)
-                .expect("SqliteConnection: failed to establish connection");
+            let tezos_db_conn = Rc::new(
+                SqliteConnection::establish(&mock_db_path)
+                    .expect("SqliteConnection: failed to establish connection"),
+            );
 
-            let tezos = TezosMock::new(&address, &tezos_db_conn);
+            let tezos = TezosMock::new(&address, tezos_db_conn);
             let driver = Driver::new(conn, tezos);
 
             run_cli(&driver);

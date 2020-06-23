@@ -5,7 +5,7 @@
 ![Continuous integration](https://github.com/mt-caret/mizu/workflows/Continuous%20integration/badge.svg)
 
 Mizu is an experiment to explore what secure, private, and asynchronous
-messaging might look on the blockchain.
+messaging backed by a decentralized store.
 Mizu is similar to email combined with PGP, while being forward secret and
 tries to reduce information leakage, similar to
 [Pond](https://web.archive.org/web/20151101081526/https://pond.imperialviolet.org/).
