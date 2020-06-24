@@ -38,6 +38,31 @@ struct CursiveData {
     drivers: Drivers,
 }
 
+impl CursiveData {
+    /// returns a driver for the current identity
+    fn current_driver(
+        &mut self,
+        user_db: &Rc<MizuConnection>,
+        factory: &TezosFactory,
+    ) -> Option<&DynamicDriver> {
+        match self.current_identity_id {
+            Some(identity_id) => {
+                let identity = user_db.find_identity(identity_id).ok()?;
+                Some(
+                    self.drivers
+                        .entry(identity.name.to_string())
+                        .or_insert_with(|| {
+                            let user_db = Rc::clone(&user_db);
+                            let tezos = factory(&identity.address, &identity.secret_key);
+                            Driver::new(user_db, tezos)
+                        }),
+                )
+            }
+            None => None,
+        }
+    }
+}
+
 fn render_identity(identity: &Option<mizu_sqlite::identity::Identity>) -> impl View {
     // id. **name**
     //     tezos_address
