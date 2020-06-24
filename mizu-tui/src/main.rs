@@ -200,7 +200,7 @@ fn render_messages<I: Iterator<Item = mizu_sqlite::message::Message>>(iter: I) -
 
     iter.fold(LinearLayout::vertical(), |view, message| {
         let content = format!("{}\n", String::from_utf8_lossy(&message.content));
-        let timestamp = message.created_at.to_string();
+        let timestamp = message.created_at.format("%Y-%m-%d %H:%M:%S").to_string();
         let mut styled = StyledString::new();
         styled.append_styled(content, Effect::Bold);
         styled.append(timestamp);
