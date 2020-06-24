@@ -398,8 +398,10 @@ mod test {
     #[test]
     fn test_smoke_1() {
         // use Tezos address
-        let alice_address = "alice";
-        let bob_address = "bob";
+        let alice_address = "alice".to_string();
+        let alice_secret_key = "alice".to_string();
+        let bob_address = "bob".to_string();
+        let bob_secret_key = "alice".to_string();
 
         let mock_conn = Rc::new({
             // Create an in-memory SQLite database
@@ -414,13 +416,17 @@ mod test {
 
         let alice = {
             let user_database = prepare_user_database();
-            let tezos_mock = TezosMock::new(alice_address, Rc::clone(&mock_conn));
+            let tezos_mock = TezosMock::new(
+                alice_address.clone(),
+                alice_secret_key,
+                Rc::clone(&mock_conn),
+            );
             Driver::new(user_database, tezos_mock)
         };
         let bob = {
             let user_database = prepare_user_database();
             // use Tezos address
-            let tezos_mock = TezosMock::new(bob_address, mock_conn);
+            let tezos_mock = TezosMock::new(bob_address.clone(), bob_secret_key, mock_conn);
             Driver::new(user_database, tezos_mock)
         };
 
@@ -433,8 +439,8 @@ mod test {
         bob.publish_identity(1).unwrap();
 
         // next, each user adds each other to the contact list (poke is not implemented yet)
-        alice.add_contact("bob's address", bob_address).unwrap();
-        bob.add_contact("alice's address", alice_address).unwrap();
+        alice.add_contact("bob's address", &bob_address).unwrap();
+        bob.add_contact("alice's address", &alice_address).unwrap();
 
         // alice sends some messages to bob.
         alice
