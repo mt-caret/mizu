@@ -450,11 +450,16 @@ fn main() -> Result<(), DynamicError> {
     let opt = Opt::from_args();
     let user_db = Rc::new(MizuConnection::connect(&opt.db)?);
     let mock_factory: TezosFactory = {
-        let mock_db = Rc::new(SqliteConnection::establish(
-            opt.tezos_mock.as_deref().unwrap_or(":memory:"),
-        )?);
+        let database_url = opt.tezos_mock.as_deref().unwrap_or(":memory:").to_string();
+        let mock_db = Rc::new(SqliteConnection::establish(&database_url)?);
         Rc::new(move |pkh, secret_key| {
-            TezosMock::new(pkh.into(), secret_key.into(), Rc::clone(&mock_db)).boxed()
+            let tezos_mock = TezosMock::new(pkh.into(), secret_key.into(), Rc::clone(&mock_db));
+
+            if database_url == ":memory:" {
+                tezos_mock.run_migrations()
+            }
+
+            tezos_mock.boxed()
         })
     };
     let theme = opt
