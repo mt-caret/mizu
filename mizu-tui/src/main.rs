@@ -241,9 +241,12 @@ fn send_message(s: &mut Cursive) {
         })
         .unwrap()
     {
+        // Rerender the world BEFORE showing a dialog
+        render_world(s);
         s.add_layer(dialog);
+    } else {
+        render_world(s);
     };
-    render_world(s);
 }
 
 fn render_input_view() -> impl View {
@@ -451,7 +454,7 @@ fn render_world(siv: &mut Cursive) {
             layers.pop_layer();
             layers.add_fullscreen_layer(world);
         }
-        _ => panic!("too many layers"),
+        _ => eprintln!("too many layers"),
     }
 }
 
