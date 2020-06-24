@@ -515,12 +515,13 @@ fn main() -> Result<(), DynamicError> {
     let user_db = Rc::new(MizuConnection::connect(&opt.db)?);
     let mock_factory: TezosFactory = {
         let database_url = opt.tezos_mock.as_deref().unwrap_or(":memory:").to_string();
+        let run_migration = database_url == ":memory:" || std::fs::metadata(&database_url).is_err();
         let mock_db = Rc::new(SqliteConnection::establish(&database_url)?);
         // Ideally, we want to perform this check in TezosMock like
         // MizuConnection::connect does, but since we use the connection
         // across multiple instances, we need to do this here.
-        if &database_url == ":memory:" || std::fs::metadata(&database_url).is_err() {
-            mizu_tezos_mock::run_migrations(&*mock_db);
+        if run_migration {
+            mizu_tezos_mock::run_migrations(&mock_db);
         }
 
         Rc::new(move |pkh, secret_key| {
