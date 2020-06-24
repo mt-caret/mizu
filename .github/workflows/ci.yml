@@ -46,8 +46,8 @@ jobs:
           toolchain: stable
           override: true
       - run: |
-        rustup component add rustfmt
-        sudo apt-get install libncurses5-dev libncursesw5-dev
+          rustup component add rustfmt
+          sudo apt-get install libncurses5-dev libncursesw5-dev
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
@@ -64,8 +64,8 @@ jobs:
           toolchain: stable
           override: true
       - run: |
-        rustup component add clippy
-        sudo apt-get install libncurses5-dev libncursesw5-dev
+          rustup component add clippy
+          sudo apt-get install libncurses5-dev libncursesw5-dev
       - uses: actions-rs/cargo@v1
         with:
           command: clippy

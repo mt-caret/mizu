@@ -314,6 +314,8 @@ struct Opt {
     #[structopt(long)]
     tezos_mock: String,
     #[structopt(long)]
+    /// Path to theme TOML file (see
+    /// https://docs.rs/cursive/0.15.0/cursive/theme/index.html#themes)
     theme: Option<PathBuf>,
 }
 
