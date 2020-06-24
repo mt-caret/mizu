@@ -1,5 +1,5 @@
 use bincode::{deserialize, serialize};
-use chrono::naive::NaiveDateTime;
+use chrono::{naive::NaiveDateTime, Utc};
 use mizu_crypto::keys::{IdentityPublicKey, PrekeyPublicKey};
 use mizu_crypto::x3dh::X3DHClient;
 use mizu_crypto::Client;
@@ -241,7 +241,13 @@ where
 
                 // Save the sending message (in plaintext).
                 self.conn
-                    .create_message(our_identity_id, their_contact_id, message.as_bytes(), true)
+                    .create_message(
+                        our_identity_id,
+                        their_contact_id,
+                        message.as_bytes(),
+                        true,
+                        Utc::now().naive_utc(),
+                    )
                     .map_err(UserData)?;
 
                 // Encrypt message and increment a ratchet.
@@ -305,24 +311,29 @@ where
 
                 let mut messages = vec![];
                 for message in data.postal_box.iter() {
+                    let timestamp = message.timestamp;
                     // assuming messages are ordered from older to newer
                     match latest_message_timestamp {
                         // if the recorded timestamp is newer than message's timestamp, skip it.
-                        Some(latest_message_timestamp)
-                            if latest_message_timestamp >= message.timestamp =>
-                        {
+                        Some(latest_message_timestamp) if latest_message_timestamp >= timestamp => {
                             continue;
                         }
                         // otherwise, update the timestamp.
                         _ => {
-                            latest_message_timestamp = Some(message.timestamp);
+                            latest_message_timestamp = Some(timestamp);
                         }
                     }
 
                     let message = deserialize(&message.content).map_err(InvalidMessage)?;
                     if let Ok(message) = client.attempt_message_decryption(rng, message) {
                         self.conn
-                            .create_message(our_identity_id, their_contact_id, &message, false)
+                            .create_message(
+                                our_identity_id,
+                                their_contact_id,
+                                &message,
+                                false,
+                                timestamp,
+                            )
                             .map_err(UserData)?;
                         messages.push(message);
                     }

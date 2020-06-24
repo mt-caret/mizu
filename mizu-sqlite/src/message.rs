@@ -18,4 +18,5 @@ pub struct NewMessage<'a> {
     pub contact_id: i32,
     pub content: &'a [u8],
     pub my_message: bool,
+    pub created_at: NaiveDateTime,
 }

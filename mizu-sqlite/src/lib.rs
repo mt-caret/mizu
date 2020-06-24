@@ -225,6 +225,7 @@ impl MizuConnection {
         contact_id: i32,
         content: &[u8],
         my_message: bool,
+        created_at: NaiveDateTime,
     ) -> Result<()> {
         diesel::insert_into(schema::messages::table)
             .values(&message::NewMessage {
@@ -232,6 +233,7 @@ impl MizuConnection {
                 contact_id,
                 content,
                 my_message,
+                created_at,
             })
             .execute(&self.conn)?;
 
@@ -252,7 +254,7 @@ impl MizuConnection {
                     .eq(identity_id)
                     .and(dsl::contact_id.eq(contact_id)),
             )
-            .order_by(dsl::id.asc()) // assuming messages in the DB are not shuffled
+            .order_by(dsl::created_at.asc())
             .load::<message::Message>(&self.conn)
     }
 }
