@@ -408,6 +408,12 @@ fn render_world(siv: &mut Cursive) {
             });
             let messages = match (data.current_identity_id, data.current_contact_id) {
                 (Some(current_identity_id), Some(current_contact_id)) => {
+                    // update messages
+                    data.current_driver().unwrap().get_messages(&mut OsRng, current_identity_id, current_contact_id)
+                        .unwrap_or_else(|e| {
+                            eprintln!("failed to retrieve messages from Tezos: identity = {}, contact = {}, {:?}", current_identity_id, current_contact_id, e);
+                            vec![]
+                        });
                     data.user_db.find_messages(current_identity_id, current_contact_id)
                         .unwrap_or_else(|e| {
                             eprintln!("failed to retrieve messages from local DB: identity = {}, contact = {}, {:?}", current_identity_id, current_contact_id, e);
