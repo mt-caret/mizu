@@ -21,6 +21,7 @@ table! {
         id -> Integer,
         name -> Text,
         address -> Text,
+        secret_key -> Text,
         x3dh_client -> Binary,
         created_at -> Timestamp,
     }

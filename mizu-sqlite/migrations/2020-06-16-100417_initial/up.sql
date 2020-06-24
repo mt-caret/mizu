@@ -12,6 +12,7 @@ CREATE TABLE identities(
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     name TEXT NOT NULL,
     address TEXT NOT NULL, -- Tezos address
+    secret_key TEXT NOT NULL, -- corresponding secret key
     x3dh_client BLOB NOT NULL, -- mizu_crypto::x3dh::X3DHClient in bincode
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(address)

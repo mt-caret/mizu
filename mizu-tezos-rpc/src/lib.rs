@@ -582,6 +582,10 @@ impl Tezos for TezosRpc {
         &self.address
     }
 
+    fn secret_key(&self) -> &str {
+        &self.secret_key
+    }
+
     fn retrieve_user_data(
         &self,
         address: &str,

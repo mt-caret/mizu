@@ -27,13 +27,15 @@ type DieselError = diesel::result::Error;
 pub struct TezosMock {
     /// Tezos address
     address: String,
+    secret_key: String,
     conn: Rc<SqliteConnection>,
 }
 
 impl TezosMock {
-    pub fn new<S: Into<String>>(address: S, conn: Rc<SqliteConnection>) -> Self {
+    pub fn new(address: String, secret_key: String, conn: Rc<SqliteConnection>) -> Self {
         TezosMock {
             address: address.into(),
+            secret_key: secret_key.into(),
             conn,
         }
     }
@@ -54,6 +56,10 @@ impl Tezos for TezosMock {
 
     fn address(&self) -> &str {
         &self.address
+    }
+
+    fn secret_key(&self) -> &str {
+        &self.secret_key
     }
 
     fn retrieve_user_data(&self, address: &str) -> Result<Option<UserData>, Self::ReadError> {

@@ -364,7 +364,9 @@ fn main() -> Result<(), DynamicError> {
         let mock_db = Rc::new(SqliteConnection::establish(
             args.tezos_mock.as_deref().unwrap_or(":memory:"),
         )?);
-        Rc::new(move |pkh, _secret_key| TezosMock::new(pkh, Rc::clone(&mock_db)).boxed())
+        Rc::new(move |pkh, secret_key| {
+            TezosMock::new(pkh.into(), secret_key.into(), Rc::clone(&mock_db)).boxed()
+        })
     };
     let drivers: Drivers = HashMap::new();
 
