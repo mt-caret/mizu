@@ -210,14 +210,40 @@ fn render_messages<I: Iterator<Item = mizu_sqlite::message::Message>>(iter: I) -
         } else {
             HAlign::Left
         }))
-    }).min_height(5)
+    })
+    .min_height(5)
 }
 
 fn send_message(s: &mut Cursive) {
     let content = s
         .call_on_name("textarea", |t: &mut TextArea| t.get_content().to_string())
         .expect("textarea should always exists");
-    s.add_layer(Dialog::text(format!("Message Sent: {}", content)).dismiss_button("Ok"));
+    if content.trim().is_empty() {
+        return;
+    }
+
+    if let Some(dialog) = s
+        .with_user_data(|data: &mut CursiveData| {
+            match (data.current_identity_id, data.current_contact_id) {
+                (None, _) => Some(Dialog::info("Please select an identity").title("Error")),
+                (_, None) => Some(Dialog::info("Please select a contact").title("Error")),
+                (Some(our_identity_id), Some(their_contact_id)) => match data
+                    .current_driver()
+                    .unwrap()
+                    .post_message(&mut OsRng, our_identity_id, their_contact_id, &content)
+                {
+                    Ok(()) => None,
+                    Err(e) => Some(
+                        Dialog::info(format!("failed to send message: {:?}", e)).title("Error"),
+                    ),
+                },
+            }
+        })
+        .unwrap()
+    {
+        s.add_layer(dialog);
+    };
+    render_world(s);
 }
 
 fn render_input_view() -> impl View {
