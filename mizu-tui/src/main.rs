@@ -505,10 +505,17 @@ fn main() -> Result<(), DynamicError> {
         })
         .unwrap_or_else(default_theme);
 
+    // TODO: persist current_ids in User DB
+    let current_identity_id = user_db
+        .list_identities()?
+        .first()
+        .map(|identity| identity.id);
+    let current_contact_id = user_db.list_contacts()?.first().map(|contact| contact.id);
+
     let mut siv = cursive::default();
     siv.set_user_data(CursiveData {
-        current_identity_id: None,
-        current_contact_id: None,
+        current_identity_id,
+        current_contact_id,
         drivers: HashMap::new(),
         user_db: Rc::clone(&user_db),
         factory: Rc::clone(&mock_factory),
