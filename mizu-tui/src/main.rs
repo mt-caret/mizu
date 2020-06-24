@@ -65,23 +65,26 @@ impl CursiveData {
 fn render_identity(identity: &Option<mizu_sqlite::identity::Identity>) -> impl View {
     // id. **name**
     //     tezos_address
-    let styled = match identity {
+    match identity {
         Some(identity) => {
             let mut styled = StyledString::plain(format!("{:>3}. ", identity.id));
             styled.append_styled(format!("{}\n", identity.name), Effect::Bold);
             styled.append(format!("     {}", identity.address));
-            styled
+
+            Panel::new(TextView::new(styled))
+                .title("Your identity")
+                .fixed_size((LEFT_WIDTH, IDENTITY_HEIGHT))
         }
         None => {
             let mut styled = StyledString::plain("Click ");
             styled.append_styled("Identity", Effect::Bold);
             styled.append(" menu");
-            styled
+
+            Panel::new(TextView::new(styled).align(Align::center()))
+                .title("Your identity")
+                .fixed_size((LEFT_WIDTH, IDENTITY_HEIGHT))
         }
-    };
-    Panel::new(TextView::new(styled))
-        .title("Your identity")
-        .fixed_size((LEFT_WIDTH, IDENTITY_HEIGHT))
+    }
 }
 
 fn render_contact(client: &mizu_sqlite::contact::Contact) -> (StyledString, i32) {
