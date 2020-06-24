@@ -265,10 +265,6 @@ where
                     )
                     .map_err(UserData)?;
 
-                // wait a sec so that the next message will have distinct timestamp
-                // TODO: better handling
-                std::thread::sleep(std::time::Duration::from_secs(1));
-
                 Ok(())
             }
             None => Err(NotFound),
@@ -395,6 +391,12 @@ mod test {
         Rc::new(mizu_connection)
     }
 
+    fn wait() {
+        // wait a sec so that the next message will have distinct timestamp
+        // TODO: better handling
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+
     #[test]
     fn test_smoke_1() {
         // use Tezos address
@@ -440,9 +442,12 @@ mod test {
         alice
             .post_message(&mut rng, 1, 1, "Hello from alice!")
             .unwrap();
+        wait();
+
         alice
             .post_message(&mut rng, 1, 1, "waiting for response...")
             .unwrap();
+        wait();
 
         // bob receives the messages
         let messages = bob.get_messages(&mut rng, 1, 1).unwrap();
@@ -453,6 +458,7 @@ mod test {
 
         // bob replies
         bob.post_message(&mut rng, 1, 1, "こんにちは").unwrap();
+        wait();
 
         // alice receives the reply
         let messages = alice.get_messages(&mut rng, 1, 1).unwrap();
