@@ -392,8 +392,6 @@ pub fn create_rpc_driver(
     contract_config: &PathBuf,
     db_path: &str,
 ) -> Result<Driver<TezosRpc>, Box<dyn std::error::Error + Send + Sync + 'static>> {
-    // Surprisingly, reading the whole file is faster.
-    // https://github.com/serde-rs/json/issues/160#issuecomment-253446892
     let faucet_output = faucet::FaucetOutput::load_from_file(faucet_output)?;
     let contract_config = contract::ContractConfig::load_from_file(contract_config)?;
     let tezos = create_tezos_rpc(faucet_output, contract_config)?;

@@ -18,6 +18,8 @@ impl FaucetOutput {
     pub fn load_from_file<P: AsRef<Path>>(
         path: P,
     ) -> Result<FaucetOutput, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        // Surprisingly, reading the whole file is faster.
+        // https://github.com/serde-rs/json/issues/160#issuecomment-253446892
         Ok(serde_json::from_str(&read_to_string(path)?)?)
     }
 }
