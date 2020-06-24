@@ -7,7 +7,7 @@ use cursive::utils::markup::StyledString;
 use cursive::views::*;
 use cursive::View;
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn render_identity(identity: &mizu_sqlite::identity::Identity) -> impl View {
     // id. **name**
