@@ -212,6 +212,8 @@ fn render_messages<I: Iterator<Item = mizu_sqlite::message::Message>>(iter: I) -
         }))
     })
     .min_height(5)
+    .full_width()
+    .scrollable()
 }
 
 fn send_message(s: &mut Cursive) {
@@ -408,9 +410,11 @@ fn render_world(siv: &mut Cursive) {
             let contacts = render_contacts(contacts);
             let left = LinearLayout::vertical().child(identity).child(contacts);
 
+            let refresh = Panel::new(Button::new("Refresh", render_world))
+                .fixed_height(3);
+
             let messages = render_messages(messages.into_iter());
             let input_view = render_input_view();
-
             let messages_title = match data.current_contact_id.map(|id| data.user_db.find_contact(id)) {
                 Some(Ok(contact)) => format!("Conversation with {}", contact.name),
                 Some(Err(e)) => {
@@ -420,12 +424,16 @@ fn render_world(siv: &mut Cursive) {
                 },
                 None => "Conversation".into(),
             };
-            let right = Panel::new(
+            let messages = Panel::new(
                 LinearLayout::vertical()
                     .child(messages)
                     .child(input_view),
             )
             .title(messages_title);
+
+            let right = LinearLayout::vertical()
+                .child(refresh)
+                .child(messages);
 
             LinearLayout::horizontal()
                 .child(left)
