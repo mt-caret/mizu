@@ -147,7 +147,7 @@ fn render_contacts(contacts: Vec<mizu_sqlite::contact::Contact>) -> impl View {
             .child(
                 LinearLayout::horizontal()
                     .child(TextView::new("   Name: "))
-                    .child(EditView::new().with_name(CONTACT_NAME_EDIT).min_width(30)),
+                    .child(EditView::new().with_name(CONTACT_NAME_EDIT).min_width(40)),
             )
             .child(
                 LinearLayout::horizontal()
