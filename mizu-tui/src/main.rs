@@ -108,6 +108,15 @@ fn render_contacts(contacts: Vec<mizu_sqlite::client::ClientInfo>) -> impl View 
         .title("Contacts")
         .min_height(5);
     let add_contact = Panel::new(Button::new("Add contact", |c| {
+        if c.with_user_data(|data: &mut CursiveData| data.current_identity_id.is_none())
+            .unwrap()
+        {
+            c.add_layer(
+                Dialog::around(TextView::new("Please select an identity")).dismiss_button("Ok"),
+            );
+            return;
+        }
+
         const CONTACT_NAME_EDIT: &str = "CONTACT_NAME_EDIT";
         const CONTACT_ADDRESS_EDIT: &str = "CONTACT_ADDRESS_EDIT";
 
@@ -135,16 +144,17 @@ fn render_contacts(contacts: Vec<mizu_sqlite::client::ClientInfo>) -> impl View 
                     let address: ViewRef<EditView> = c.find_name(CONTACT_ADDRESS_EDIT).unwrap();
                     c.pop_layer();
 
-                    c.with_user_data(|data: &mut CursiveData| {
-                        if let Err(e) = data
-                            .current_driver()
-                            .unwrap()
-                            .add_contact(&name.get_content(), &address.get_content())
-                        {
-                            eprintln!("failed to add contact: {:?}", e);
-                        }
-                    })
-                    .unwrap();
+                    match c
+                        .with_user_data(|data: &mut CursiveData| {
+                            data.current_driver()
+                                .unwrap()
+                                .add_contact(&name.get_content(), &address.get_content())
+                        })
+                        .unwrap()
+                    {
+                        Ok(()) => render_world(c),
+                        Err(e) => eprintln!("failed to add contact: {:?}", e),
+                    };
                 })
                 .h_align(HAlign::Center),
         )
@@ -289,26 +299,24 @@ fn render_identity_menu(
     }
     for identity in identities.iter() {
         let id = identity.id;
-        let user_db = Rc::clone(&user_db);
-        let factory = Rc::clone(&factory);
         tree.add_leaf(&identity.name, move |c| {
             c.with_user_data(move |data: &mut CursiveData| {
                 data.current_identity_id = Some(id);
             });
-            render_world(c, Rc::clone(&user_db), Rc::clone(&factory));
+            render_world(c);
         });
     }
 
     Ok(())
 }
 
-fn render_world(siv: &mut Cursive, user_db: Rc<MizuConnection>, _factory: TezosFactory) {
+fn render_world(siv: &mut Cursive) {
     let world = siv
         .with_user_data(|data: &mut CursiveData| {
             let last_current_contact_id = data.current_contact_id.take();
             let (identity, contacts) =
-                match data.current_identity_id.map(|id| user_db.find_identity(id)) {
-                    Some(Ok(identity)) => match user_db.list_talking_clients(identity.id) {
+                match data.current_identity_id.map(|id| data.user_db.find_identity(id)) {
+                    Some(Ok(identity)) => match data.user_db.list_talking_clients(identity.id) {
                         Ok(contacts) => {
                             // if the last current_contact_id is valid, keep using it
                             if let Some(contact) = contacts.iter()
@@ -334,7 +342,7 @@ fn render_world(siv: &mut Cursive, user_db: Rc<MizuConnection>, _factory: TezosF
                 };
             let messages = match (data.current_identity_id, data.current_contact_id) {
                 (Some(current_identity_id), Some(current_contact_id)) => {
-                    user_db.find_messages(current_identity_id, current_contact_id)
+                    data.user_db.find_messages(current_identity_id, current_contact_id)
                         .unwrap_or_else(|e| {
                             eprintln!("failed to retrieve messages from local DB: identity = {}, contact = {}, {:?}", current_identity_id, current_contact_id, e);
                             vec![]
@@ -488,7 +496,7 @@ fn main() -> Result<(), DynamicError> {
 
     siv.set_autohide_menu(false);
     //siv.add_fullscreen_layer(view);
-    render_world(&mut siv, user_db, mock_factory);
+    render_world(&mut siv);
     siv.add_global_callback(Key::Esc, |c| c.select_menubar());
     siv.run();
 
