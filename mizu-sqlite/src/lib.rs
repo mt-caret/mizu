@@ -3,8 +3,12 @@
 #[macro_use]
 extern crate diesel;
 
+#[macro_use]
+extern crate diesel_migrations;
+
 use chrono::naive::NaiveDateTime;
 use diesel::prelude::*;
+use diesel_migrations::embed_migrations;
 use mizu_crypto::x3dh::X3DHClient;
 use mizu_crypto::Client;
 
@@ -21,6 +25,8 @@ pub struct MizuConnection {
     conn: SqliteConnection,
 }
 
+embed_migrations!("./migrations");
+
 impl MizuConnection {
     pub fn new(conn: SqliteConnection) -> Self {
         MizuConnection { conn }
@@ -30,6 +36,13 @@ impl MizuConnection {
         Ok(Self {
             conn: SqliteConnection::establish(url)?,
         })
+    }
+
+    // TODO: should probably check for errors
+    // TODO: embedded_migrations::run_with_output will redirect output instead
+    // of throwing it away, should log this.
+    pub fn run_migrations(&self) {
+        embedded_migrations::run(&self.conn).expect("migration should never fail");
     }
 
     pub fn create_identity(

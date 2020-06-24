@@ -375,11 +375,11 @@ pub fn create_rpc_driver(
     Ok(Driver::new(conn, tezos))
 }
 
-// ensure test related code (especially migration SQL) is not included in the binary
+// ensure test related code is not included in the binary
 #[cfg(test)]
 mod test {
     use super::*;
-    use diesel::{connection::SimpleConnection, prelude::*};
+    use diesel::prelude::*;
     use mizu_sqlite::MizuConnection;
     use mizu_tezos_mock::TezosMock;
     use rand::rngs::OsRng;
@@ -388,11 +388,11 @@ mod test {
     fn prepare_user_database() -> Rc<MizuConnection> {
         // Create an in-memory SQLite database
         let conn = SqliteConnection::establish(":memory:").unwrap();
-        let migration =
-            include_str!("../../mizu-sqlite/migrations/2020-06-16-100417_initial/up.sql");
-        conn.batch_execute(migration).unwrap();
 
-        Rc::new(MizuConnection::new(conn))
+        let mizu_connection = MizuConnection::new(conn);
+        mizu_connection.run_migrations();
+
+        Rc::new(mizu_connection)
     }
 
     #[test]
@@ -403,14 +403,7 @@ mod test {
         let bob_address = "bob".to_string();
         let bob_secret_key = "alice".to_string();
 
-        let mock_conn = Rc::new({
-            // Create an in-memory SQLite database
-            let conn = SqliteConnection::establish(":memory:").unwrap();
-            let migration =
-                include_str!("../../mizu-tezos-mock/migrations/2020-06-17-013029_initial/up.sql");
-            conn.batch_execute(migration).unwrap();
-            conn
-        });
+        let mock_conn = Rc::new(SqliteConnection::establish(":memory:").unwrap());
 
         let mut rng = OsRng;
 
@@ -421,6 +414,8 @@ mod test {
                 alice_secret_key,
                 Rc::clone(&mock_conn),
             );
+            // This must be run *once and only once* per database, or will fail.
+            tezos_mock.run_migrations();
             Driver::new(user_database, tezos_mock)
         };
         let bob = {
