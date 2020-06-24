@@ -255,7 +255,6 @@ where
                 let payload = serialize(&message).unwrap();
                 self.tezos.post(&[&payload], &[]).map_err(TezosWrite)?;
 
-
                 // Save the incremented Client.
                 self.conn
                     .upsert_client(
