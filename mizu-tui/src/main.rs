@@ -240,10 +240,18 @@ fn render_identity_menu(
 fn render_world(siv: &mut Cursive, user_db: Rc<MizuConnection>, _factory: TezosFactory) {
     let world = siv
         .with_user_data(|data: &mut CursiveData| {
+            let last_current_contact_id = data.current_contact_id.take();
             let (identity, contacts) =
                 match data.current_identity_id.map(|id| user_db.find_identity(id)) {
                     Some(Ok(identity)) => match user_db.list_talking_clients(identity.id) {
-                        Ok(contacts) => (Some(identity), contacts),
+                        Ok(contacts) => {
+                            // if the last current_contact_id is valid, keep using it
+                            if let Some(contact) = contacts.iter()
+                                .find(|c| Some(c.contact_id) == last_current_contact_id) {
+                                    data.current_contact_id = Some(contact.contact_id)
+                                }
+                            (Some(identity), contacts)
+                        },
                         Err(e) => {
                             eprintln!(
                                 "error while retrieving contacts for the current identity {}: {:?}",
@@ -259,9 +267,33 @@ fn render_world(siv: &mut Cursive, user_db: Rc<MizuConnection>, _factory: TezosF
                     }
                     None => (None, vec![]),
                 };
+            let messages = match (data.current_identity_id, data.current_contact_id) {
+                (Some(current_identity_id), Some(current_contact_id)) => {
+                    user_db.find_messages(current_identity_id, current_contact_id)
+                        .unwrap_or_else(|e| {
+                            eprintln!("failed to retrieve messages from local DB: identity = {}, contact = {}, {:?}", current_identity_id, current_contact_id, e);
+                            vec![]
+                        })
+                }
+                _ => vec![],
+            };
+
             let identity = render_identity(&identity);
             let contacts = render_contacts(contacts);
-            LinearLayout::vertical().child(identity).child(contacts)
+            let left = LinearLayout::vertical().child(identity).child(contacts);
+
+            let messages = render_messages(messages.into_iter());
+            let right = Panel::new(
+                LinearLayout::vertical()
+                    .child(messages)
+                    .child(TextArea::new().min_height(3)),
+            )
+            .title("Messages");
+
+            LinearLayout::horizontal()
+                .child(left)
+                .child(DummyView)
+                .child(right.full_screen())
         })
         .unwrap();
 
@@ -337,64 +369,6 @@ fn main() -> Result<(), DynamicError> {
     let drivers: Drivers = HashMap::new();
 
     let opt = Opt::from_args();
-
-    /*let identity = mizu_sqlite::identity::Identity {
-        id: 1,
-        name: "Alice".into(),
-        address: "tz1alice".into(),
-        x3dh_client: vec![],
-        created_at: "".into(),
-    };
-    let client_info = vec![];
-    let left_view = LinearLayout::vertical()
-        .child(render_identity(&None))
-        .child(render_contacts(client_info.into_iter()));
-
-    let messages = vec![
-        mizu_sqlite::message::Message {
-            id: 1,
-            identity_id: 1,
-            contact_id: 1,
-            content: b"Hi!"[..].into(),
-            my_message: false,
-            created_at: NaiveDate::from_ymd(1996, 5, 24).and_hms(1, 23, 0),
-        },
-        mizu_sqlite::message::Message {
-            id: 1,
-            identity_id: 1,
-            contact_id: 1,
-            content: b"Hellooooooooo"[..].into(),
-            my_message: false,
-            created_at: NaiveDate::from_ymd(1996, 5, 24).and_hms(1, 23, 13),
-        },
-        mizu_sqlite::message::Message {
-            id: 1,
-            identity_id: 1,
-            contact_id: 1,
-            content: b"Are you here?"[..].into(),
-            my_message: false,
-            created_at: NaiveDate::from_ymd(1996, 5, 24).and_hms(1, 23, 58),
-        },
-        mizu_sqlite::message::Message {
-            id: 1,
-            identity_id: 1,
-            contact_id: 1,
-            content: b"what?"[..].into(),
-            my_message: true,
-            created_at: NaiveDate::from_ymd(1996, 5, 24).and_hms(1, 25, 1),
-        },
-    ];
-    let right_view = Panel::new(
-        LinearLayout::vertical()
-            .child(render_messages(messages.into_iter()))
-            .child(TextArea::new().min_height(3)),
-    )
-    .title("Messages");
-
-    let view = LinearLayout::horizontal()
-        .child(left_view)
-        .child(DummyView)
-        .child(right_view.full_screen());*/
 
     let mut siv = cursive::default();
     siv.set_user_data(CursiveData {
