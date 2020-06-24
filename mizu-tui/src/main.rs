@@ -1,3 +1,4 @@
+use chrono::naive::NaiveDate;
 use cursive::align::{Align, HAlign};
 use cursive::event::Key;
 use cursive::menu::MenuTree;
@@ -6,14 +7,29 @@ use cursive::theme::Effect;
 use cursive::traits::*;
 use cursive::utils::markup::StyledString;
 use cursive::views::*;
+use cursive::Cursive;
 use cursive::View;
+use diesel::prelude::*;
+use mizu_driver::Driver;
+use mizu_sqlite::MizuConnection;
+use mizu_tezos_interface::{BoxedTezos, Tezos};
+use mizu_tezos_mock::TezosMock;
+use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use structopt::StructOpt;
 
+type DynamicDriver = Driver<BoxedTezos<'static>>;
+type DynamicError = Box<dyn Error + Send + Sync + 'static>;
+type Drivers = HashMap<String, DynamicDriver>;
+// address * secret_key -> Tezos
+type TezosFactory = Rc<dyn Fn(&str, &str) -> BoxedTezos<'static>>;
+
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+const IDENTITY_MENU_INDEX: usize = 1;
 
 fn render_identity(identity: &mizu_sqlite::identity::Identity) -> impl View {
     // id. **name**
@@ -88,13 +104,99 @@ fn aligned_inputs<S: Into<String>>(labels: Vec<S>) -> impl View {
 fn error_dialog<E: std::fmt::Debug>(error: E) -> impl View {
     Dialog::around(TextView::new(format!("{:?}", error)))
         .title("Error")
-        .dismiss_button("OK")
+        .dismiss_button("Ok")
+}
+
+fn register_callback(
+    user_db: Rc<MizuConnection>,
+    factory: TezosFactory,
+) -> impl Fn(&mut Cursive) + 'static {
+    move |c| {
+        const IDENTITY_FILE_EDIT: &str = "IDENTITY_FILE_EDIT";
+
+        let content = LinearLayout::horizontal()
+            .child(TextView::new("identity file: "))
+            .child(EditView::new().with_name(IDENTITY_FILE_EDIT).min_width(15));
+
+        c.add_layer(
+            Dialog::around(content)
+                .title("Register your identity with Mizu")
+                .dismiss_button("Cancel")
+                .button("Ok", {
+                    let user_db = Rc::clone(&user_db);
+                    let factory = Rc::clone(&factory);
+                    move |c| {
+                        let edit: ViewRef<EditView> = c.find_name(IDENTITY_FILE_EDIT).unwrap();
+                        c.pop_layer();
+
+                        match read_identity_file(edit.get_content().as_str()).and_then(|file| {
+                            let name = file.name;
+                            let tezos = factory(&file.pkh, &file.secret_key);
+                            let driver = Driver::new(Rc::clone(&user_db), tezos);
+                            driver.generate_identity(&mut OsRng, &name)?;
+                            c.with_user_data(|drivers: &mut Drivers| {
+                                drivers.insert(name.clone(), driver)
+                            })
+                            .unwrap();
+
+                            // rerender the Identity menu
+                            render_identity_menu(
+                                // 1st subtree corresponds to "Identity" menu
+                                c.menubar().get_subtree(IDENTITY_MENU_INDEX).unwrap(),
+                                Rc::clone(&user_db),
+                                Rc::clone(&factory),
+                            )?;
+
+                            Ok(name)
+                        }) {
+                            Ok(name) => c.add_layer(
+                                Dialog::around({
+                                    let mut styled = StyledString::plain("Registered yourself as ");
+                                    styled.append_styled(name, Effect::Bold);
+                                    TextView::new(styled)
+                                })
+                                .title("Registration succeeded")
+                                .dismiss_button("Ok"),
+                            ),
+                            Err(e) => c.add_layer(error_dialog(e)),
+                        }
+                    }
+                })
+                .h_align(HAlign::Center),
+        );
+    }
+}
+
+fn render_identity_menu(
+    tree: &mut MenuTree,
+    user_db: Rc<MizuConnection>,
+    factory: TezosFactory,
+) -> Result<(), DynamicError> {
+    // identity
+    // --------
+    // identity_1
+    // identity_2
+
+    let identities = user_db.list_identities()?;
+    tree.clear();
+    tree.add_leaf("register", register_callback(user_db, factory));
+
+    if !identities.is_empty() {
+        tree.add_delimiter();
+    }
+    for identity in identities.iter() {
+        tree.add_leaf(&identity.name, |_c| {});
+    }
+
+    Ok(())
 }
 
 #[derive(StructOpt)]
 struct Opt {
     db: String,
+    #[structopt(long)]
     tezos_mock: String,
+    #[structopt(long)]
     theme: Option<PathBuf>,
 }
 
@@ -139,24 +241,13 @@ fn default_theme() -> theme::Theme {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
-    use chrono::naive::NaiveDate;
-    use diesel::prelude::*;
-    use mizu_driver::Driver;
-    use mizu_sqlite::MizuConnection;
-    use mizu_tezos_interface::BoxedTezos;
-    use mizu_tezos_mock::TezosMock;
-    use rand::rngs::OsRng;
-    use std::collections::HashMap;
-
-    type Drivers = HashMap<String, Driver<BoxedTezos<'static>>>;
-
+fn main() -> Result<(), DynamicError> {
     let args = Opt::from_args();
     let user_db = Rc::new(MizuConnection::connect(&args.db)?);
     let mock_db = Rc::new(SqliteConnection::establish(&args.tezos_mock)?);
-    let mock_factory = {
+    let mock_factory: TezosFactory = {
         let mock_db = Rc::clone(&mock_db);
-        Rc::new(move |pkh: String, _secret_key: String| TezosMock::new(pkh, Rc::clone(&mock_db)))
+        Rc::new(move |pkh, _secret_key| TezosMock::new(pkh, Rc::clone(&mock_db)).boxed())
     };
     let drivers: Drivers = HashMap::new();
 
@@ -268,53 +359,14 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
                 })
                 .leaf("Exit", |c| c.quit()),
         )
-        .add_subtree(
-            "Identity",
-            MenuTree::new().leaf("register", {
-                let user_db = Rc::clone(&user_db);
-                move |c| {
-                    const IDENTITY_FILE_EDIT: &str = "IDENTITY_FILE_EDIT";
+        .add_subtree("Identity", MenuTree::new());
 
-                    let content = LinearLayout::horizontal()
-                        .child(TextView::new("identity file: "))
-                        .child(EditView::new().with_name(IDENTITY_FILE_EDIT).min_width(15));
-
-                    c.add_layer(
-                        Dialog::around(content)
-                            .title("Register your identity with Mizu")
-                            .dismiss_button("Cancel")
-                            .button("OK", {
-                                let user_db = Rc::clone(&user_db);
-                                let mock_factory = Rc::clone(&mock_factory);
-                                move |c| {
-                                    c.pop_layer();
-
-                                    let edit: ViewRef<EditView> =
-                                        c.find_name(IDENTITY_FILE_EDIT).unwrap();
-                                    if let Err(e) = read_identity_file(edit.get_content().as_str())
-                                        .and_then(|file| {
-                                            let name = file.name;
-                                            let mock = mock_factory(file.pkh, file.secret_key);
-                                            let driver =
-                                                Driver::new(Rc::clone(&user_db), mock).boxed();
-                                            driver.generate_identity(&mut OsRng, &name)?;
-                                            c.with_user_data(move |drivers: &mut Drivers| {
-                                                drivers.insert(name, driver)
-                                            })
-                                            .unwrap();
-
-                                            Ok(())
-                                        })
-                                    {
-                                        c.add_layer(error_dialog(e))
-                                    }
-                                }
-                            })
-                            .h_align(HAlign::Center),
-                    );
-                }
-            }),
-        );
+    render_identity_menu(
+        // 1st subtree corresponds to "Identity" menu
+        siv.menubar().get_subtree(IDENTITY_MENU_INDEX).unwrap(),
+        Rc::clone(&user_db),
+        Rc::clone(&mock_factory),
+    )?;
 
     siv.set_autohide_menu(false);
     siv.add_fullscreen_layer(view);
