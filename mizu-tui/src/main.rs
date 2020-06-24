@@ -210,7 +210,7 @@ fn render_messages<I: Iterator<Item = mizu_sqlite::message::Message>>(iter: I) -
         } else {
             HAlign::Left
         }))
-    })
+    }).min_height(5)
 }
 
 fn send_message(s: &mut Cursive) {
