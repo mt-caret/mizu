@@ -67,7 +67,6 @@ fn render_identity(identity: &Option<mizu_sqlite::identity::Identity>) -> impl V
     //     tezos_address
     let styled = match identity {
         Some(identity) => {
-            eprintln!("{} {}", identity.name, identity.address);
             let mut styled = StyledString::plain(format!("{:>3}. ", identity.id));
             styled.append_styled(format!("{}\n", identity.name), Effect::Bold);
             styled.append(format!("     {}", identity.address));
@@ -85,21 +84,21 @@ fn render_identity(identity: &Option<mizu_sqlite::identity::Identity>) -> impl V
         .fixed_size((LEFT_WIDTH, IDENTITY_HEIGHT))
 }
 
-fn render_contact(client: &mizu_sqlite::client::ClientInfo) -> (StyledString, i32) {
+fn render_contact(client: &mizu_sqlite::contact::Contact) -> (StyledString, i32) {
     // contact_id. **name**       timestamp
     //             tezos_address
     // TODO: show last message like Signal?
-    let mut styled = StyledString::plain(format!("{:>3}. ", client.contact_id));
+    let mut styled = StyledString::plain(format!("{:>3}. ", client.id));
     styled.append_styled(format!("{:<15}", client.name), Effect::Bold);
-    match client.latest_message_timestamp {
+    /*match client.latest_message_timestamp {
         Some(ts) => styled.append(format!("{}\n", ts)),
         None => styled.append("\n"),
-    }
+    }*/
     styled.append(format!("     {}", client.address));
-    (styled, client.contact_id)
+    (styled, client.id)
 }
 
-fn render_contacts(contacts: Vec<mizu_sqlite::client::ClientInfo>) -> impl View {
+fn render_contacts(contacts: Vec<mizu_sqlite::contact::Contact>) -> impl View {
     // -----Contacts-----
     // | contacts here  |
     // ------------------
@@ -313,33 +312,22 @@ fn render_identity_menu(
 fn render_world(siv: &mut Cursive) {
     let world = siv
         .with_user_data(|data: &mut CursiveData| {
-            let last_current_contact_id = data.current_contact_id.take();
-            let (identity, contacts) =
+            let identity =
                 match data.current_identity_id.map(|id| data.user_db.find_identity(id)) {
-                    Some(Ok(identity)) => match data.user_db.list_talking_clients(identity.id) {
-                        Ok(contacts) => {
-                            // if the last current_contact_id is valid, keep using it
-                            if let Some(contact) = contacts.iter()
-                                .find(|c| Some(c.contact_id) == last_current_contact_id) {
-                                    data.current_contact_id = Some(contact.contact_id)
-                                }
-                            (Some(identity), contacts)
-                        },
-                        Err(e) => {
-                            eprintln!(
-                                "error while retrieving contacts for the current identity {}: {:?}",
-                                identity.name, e
-                            );
-                            (Some(identity), vec![])
-                        }
-                    },
+                    Some(Ok(identity)) => Some(identity),
                     Some(Err(e)) => {
                         eprintln!("current identity not found: {:?}", e);
                         data.current_identity_id = None;
-                        (None, vec![])
+                        None
                     }
-                    None => (None, vec![]),
+                    None => None,
                 };
+            // TODO: contacts are shared among identities
+            // list_talking_clients searches for `Client`s, so contacts are not listed if no conversation happened
+            let contacts = data.user_db.list_contacts().unwrap_or_else(|e| {
+                eprintln!("failed to retrieve contacts from local DB: {:?}", e);
+                vec![]
+            });
             let messages = match (data.current_identity_id, data.current_contact_id) {
                 (Some(current_identity_id), Some(current_contact_id)) => {
                     data.user_db.find_messages(current_identity_id, current_contact_id)
