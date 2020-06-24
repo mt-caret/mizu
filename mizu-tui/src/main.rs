@@ -312,7 +312,7 @@ fn render_world(siv: &mut Cursive, user_db: Rc<MizuConnection>, _factory: TezosF
 struct Opt {
     db: String,
     #[structopt(long)]
-    tezos_mock: String,
+    tezos_mock: Option<String>,
     #[structopt(long)]
     /// Path to theme TOML file (see
     /// https://docs.rs/cursive/0.15.0/cursive/theme/index.html#themes)
@@ -363,9 +363,10 @@ fn default_theme() -> theme::Theme {
 fn main() -> Result<(), DynamicError> {
     let args = Opt::from_args();
     let user_db = Rc::new(MizuConnection::connect(&args.db)?);
-    let mock_db = Rc::new(SqliteConnection::establish(&args.tezos_mock)?);
     let mock_factory: TezosFactory = {
-        let mock_db = Rc::clone(&mock_db);
+        let mock_db = Rc::new(SqliteConnection::establish(
+            args.tezos_mock.as_deref().unwrap_or(":memory:"),
+        )?);
         Rc::new(move |pkh, _secret_key| TezosMock::new(pkh, Rc::clone(&mock_db)).boxed())
     };
     let drivers: Drivers = HashMap::new();
