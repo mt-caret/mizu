@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cursive = { version = "0.15.0", default-features = false, features = ["crossterm-backend"] }
+cursive = { version = "0.15.0", default-features = false, features = ["ncurses-backend", "toml"] }
 mizu-driver = { path = "../mizu-driver" }
 mizu-sqlite = { path = "../mizu-sqlite" }
 mizu-tezos-mock = { path = "../mizu-tezos-mock" }

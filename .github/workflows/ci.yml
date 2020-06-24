@@ -13,6 +13,8 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+      - run: |
+          sudo apt-get install libncurses5-dev libncursesw5-dev
       - uses: actions-rs/cargo@v1
         with:
           command: check
@@ -28,7 +30,7 @@ jobs:
           toolchain: stable
           override: true
       - run: |
-          sudo apt-get install libsqlite3-dev
+          sudo apt-get install libsqlite3-dev libncurses5-dev libncursesw5-dev
       - uses: actions-rs/cargo@v1
         with:
           command: test
@@ -43,7 +45,9 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - run: rustup component add rustfmt
+      - run: |
+        rustup component add rustfmt
+        sudo apt-get install libncurses5-dev libncursesw5-dev
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
@@ -59,7 +63,9 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - run: rustup component add clippy
+      - run: |
+        rustup component add clippy
+        sudo apt-get install libncurses5-dev libncursesw5-dev
       - uses: actions-rs/cargo@v1
         with:
           command: clippy

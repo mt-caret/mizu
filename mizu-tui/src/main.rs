@@ -1,6 +1,7 @@
-use cursive::align::HAlign;
+use cursive::align::{Align, HAlign};
 use cursive::event::Key;
 use cursive::menu::MenuTree;
+use cursive::theme;
 use cursive::theme::Effect;
 use cursive::traits::*;
 use cursive::utils::markup::StyledString;
@@ -8,9 +9,11 @@ use cursive::views::*;
 use cursive::View;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use structopt::StructOpt;
+
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn render_identity(identity: &mizu_sqlite::identity::Identity) -> impl View {
     // id. **name**
@@ -90,10 +93,9 @@ fn error_dialog<E: std::fmt::Debug>(error: E) -> impl View {
 
 #[derive(StructOpt)]
 struct Opt {
-    #[structopt(long)]
     db: String,
-    #[structopt(long)]
     tezos_mock: String,
+    theme: Option<PathBuf>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -109,6 +111,32 @@ fn read_identity_file<P: AsRef<Path>>(
     let content = std::fs::read_to_string(path)?;
     let identity_file = serde_json::from_str(&content)?;
     Ok(identity_file)
+}
+
+fn default_theme() -> theme::Theme {
+    use theme::*;
+
+    let mut palette = Palette::default();
+    let default_colors = vec![
+        (PaletteColor::Background, Color::TerminalDefault),
+        (PaletteColor::Shadow, Color::TerminalDefault),
+        (PaletteColor::View, Color::TerminalDefault),
+        (PaletteColor::Primary, Color::TerminalDefault),
+        (PaletteColor::Secondary, Color::TerminalDefault),
+        (PaletteColor::Tertiary, Color::TerminalDefault),
+        (PaletteColor::TitlePrimary, Color::TerminalDefault),
+        (PaletteColor::TitleSecondary, Color::TerminalDefault),
+        (PaletteColor::Highlight, Color::TerminalDefault),
+        (PaletteColor::HighlightInactive, Color::TerminalDefault),
+        (PaletteColor::HighlightText, Color::TerminalDefault),
+    ];
+    palette.extend(default_colors);
+
+    Theme {
+        shadow: false,
+        borders: BorderStyle::Simple,
+        palette,
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
@@ -131,6 +159,8 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         Rc::new(move |pkh: String, _secret_key: String| TezosMock::new(pkh, Rc::clone(&mock_db)))
     };
     let drivers: Drivers = HashMap::new();
+
+    let opt = Opt::from_args();
 
     let identity = mizu_sqlite::identity::Identity {
         id: 1,
@@ -205,11 +235,37 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
 
     let mut siv = cursive::default();
     siv.set_user_data(drivers);
+
+    let theme = opt
+        .theme
+        .and_then(|theme_path| match theme::load_theme_file(theme_path) {
+            Ok(theme) => Some(theme),
+            Err(theme::Error::Io(err)) => {
+                eprintln!("error loading theme: {}", err);
+                None
+            }
+            Err(theme::Error::Parse(err)) => {
+                eprintln!("error parsing theme: {}", err);
+                None
+            }
+        })
+        .unwrap_or_else(default_theme);
+    siv.set_theme(theme);
+
     siv.menubar()
         .add_subtree(
             "Application",
             MenuTree::new()
-                .leaf("About Mizu", |_c| {})
+                .leaf("About Mizu", |c| {
+                    let mut styled =
+                        StyledString::plain(format!("💧 Mizu Messenger v{}\n", VERSION));
+                    styled.append_styled("https://github.com/mt-caret/mizu", Effect::Underline);
+                    let content = TextView::new(styled).align(Align::center());
+                    let dialog = Dialog::around(content)
+                        .dismiss_button("Ok")
+                        .h_align(HAlign::Center);
+                    c.add_layer(dialog);
+                })
                 .leaf("Exit", |c| c.quit()),
         )
         .add_subtree(
