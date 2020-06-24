@@ -239,6 +239,11 @@ where
                     &their_contact.address,
                 )?;
 
+                // Save the sending message (in plaintext).
+                self.conn
+                    .create_message(our_identity_id, their_contact_id, message.as_bytes(), true)
+                    .map_err(UserData)?;
+
                 // Encrypt message and increment a ratchet.
                 // TODO: I don't know this unwrap() may panic or not. Any thoughts? > mt_caret
                 let message = client
@@ -250,10 +255,6 @@ where
                 let payload = serialize(&message).unwrap();
                 self.tezos.post(&[&payload], &[]).map_err(TezosWrite)?;
 
-                // Save the sent message.
-                self.conn
-                    .create_message(our_identity_id, their_contact_id, &payload, true)
-                    .map_err(UserData)?;
 
                 // Save the incremented Client.
                 self.conn
