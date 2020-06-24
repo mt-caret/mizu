@@ -267,25 +267,6 @@ fn render_input_view() -> impl View {
     )
 }
 
-/*
-fn aligned_inputs<S: Into<String>>(labels: Vec<S>) -> impl View {
-    const DEFAULT_LENGTH: usize = 15;
-
-    let labels: Vec<String> = labels.into_iter().map(Into::into).collect();
-    let max_len = labels.iter().map(|s| s.len()).max().unwrap();
-
-    labels
-        .into_iter()
-        .fold(LinearLayout::vertical(), |view, label| {
-            view.child(
-                LinearLayout::horizontal()
-                    .child(TextView::new(format!("{0:<1$}", label, max_len)))
-                    .child(EditView::new().min_width(DEFAULT_LENGTH)),
-            )
-        })
-}
-*/
-
 fn error_dialog<E: std::fmt::Debug>(error: E) -> impl View {
     Dialog::around(TextView::new(format!("{:?}", error)))
         .title("Error")
