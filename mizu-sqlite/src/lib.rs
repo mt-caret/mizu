@@ -3,8 +3,12 @@
 #[macro_use]
 extern crate diesel;
 
+#[macro_use]
+extern crate diesel_migrations;
+
 use chrono::naive::NaiveDateTime;
 use diesel::prelude::*;
+use diesel_migrations::embed_migrations;
 use mizu_crypto::x3dh::X3DHClient;
 use mizu_crypto::Client;
 
@@ -21,15 +25,32 @@ pub struct MizuConnection {
     conn: SqliteConnection,
 }
 
+embed_migrations!();
+
 impl MizuConnection {
     pub fn new(conn: SqliteConnection) -> Self {
         MizuConnection { conn }
     }
 
     pub fn connect(url: &str) -> std::result::Result<Self, ConnectionError> {
-        Ok(Self {
+        let run_migration = url == ":memory:" || std::fs::metadata(url).is_err();
+
+        let mizu_connection = Self {
             conn: SqliteConnection::establish(url)?,
-        })
+        };
+
+        if run_migration {
+            mizu_connection.run_migrations();
+        }
+
+        Ok(mizu_connection)
+    }
+
+    // TODO: should probably check for errors
+    // TODO: embedded_migrations::run_with_output will redirect output instead
+    // of throwing it away, should log this.
+    pub fn run_migrations(&self) {
+        embedded_migrations::run(&self.conn).expect("migration should never fail");
     }
 
     pub fn create_identity(

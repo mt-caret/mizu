@@ -3,7 +3,11 @@
 #[macro_use]
 extern crate diesel;
 
+#[macro_use]
+extern crate diesel_migrations;
+
 use diesel::prelude::*;
+use diesel_migrations::embed_migrations;
 use mizu_tezos_interface::*;
 use std::rc::Rc;
 
@@ -29,6 +33,15 @@ pub struct TezosMock {
     address: String,
     secret_key: String,
     conn: Rc<SqliteConnection>,
+}
+
+embed_migrations!();
+
+// TODO: should probably check for errors
+// TODO: embedded_migrations::run_with_output will redirect output instead
+// of throwing it away, should log this.
+pub fn run_migrations(conn: &SqliteConnection) {
+    embedded_migrations::run(conn).expect("migration should never fail");
 }
 
 impl TezosMock {
