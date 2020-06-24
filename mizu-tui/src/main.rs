@@ -1,13 +1,13 @@
 use cursive::align::{Align, HAlign};
-use cursive::event::Key;
+use cursive::event::{Event, Key};
 use cursive::menu::MenuTree;
 use cursive::theme;
 use cursive::theme::Effect;
 use cursive::traits::*;
 use cursive::utils::markup::StyledString;
+use cursive::view::SizeConstraint;
 use cursive::views::*;
 use cursive::Cursive;
-use cursive::View;
 use diesel::prelude::*;
 use mizu_driver::Driver;
 use mizu_sqlite::MizuConnection;
