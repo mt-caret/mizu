@@ -1,11 +1,14 @@
 use cursive::align::{Align, HAlign};
 use cursive::event::Key;
 use cursive::menu::MenuTree;
+use cursive::theme;
 use cursive::theme::Effect;
 use cursive::traits::*;
 use cursive::utils::markup::StyledString;
 use cursive::views::*;
 use cursive::View;
+use std::path::PathBuf;
+use structopt::StructOpt;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -79,8 +82,41 @@ fn aligned_inputs<S: Into<String>>(labels: Vec<S>) -> impl View {
 }
 */
 
+#[derive(StructOpt)]
+struct Opt {
+    theme: Option<PathBuf>,
+}
+
+fn default_theme() -> theme::Theme {
+    use theme::*;
+
+    let mut palette = Palette::default();
+    let default_colors = vec![
+        (PaletteColor::Background, Color::TerminalDefault),
+        (PaletteColor::Shadow, Color::TerminalDefault),
+        (PaletteColor::View, Color::TerminalDefault),
+        (PaletteColor::Primary, Color::TerminalDefault),
+        (PaletteColor::Secondary, Color::TerminalDefault),
+        (PaletteColor::Tertiary, Color::TerminalDefault),
+        (PaletteColor::TitlePrimary, Color::TerminalDefault),
+        (PaletteColor::TitleSecondary, Color::TerminalDefault),
+        (PaletteColor::Highlight, Color::TerminalDefault),
+        (PaletteColor::HighlightInactive, Color::TerminalDefault),
+        (PaletteColor::HighlightText, Color::TerminalDefault),
+    ];
+    palette.extend(default_colors);
+
+    Theme {
+        shadow: false,
+        borders: BorderStyle::Simple,
+        palette,
+    }
+}
+
 fn main() {
     use chrono::naive::NaiveDate;
+
+    let opt = Opt::from_args();
 
     let identity = mizu_sqlite::identity::Identity {
         id: 1,
@@ -154,6 +190,23 @@ fn main() {
         .child(right_view.full_screen());
 
     let mut siv = cursive::default();
+
+    let theme = opt
+        .theme
+        .and_then(|theme_path| match theme::load_theme_file(theme_path) {
+            Ok(theme) => Some(theme),
+            Err(theme::Error::Io(err)) => {
+                eprintln!("error loading theme: {}", err);
+                None
+            }
+            Err(theme::Error::Parse(err)) => {
+                eprintln!("error parsing theme: {}", err);
+                None
+            }
+        })
+        .unwrap_or_else(default_theme);
+    siv.set_theme(theme);
+
     siv.menubar()
         .add_subtree(
             "Application",

@@ -1,0 +1,19 @@
+# The default theme for cursive
+shadow = false
+borders = "simple"
+
+[colors]
+    background = "blue"
+    shadow     = "black"
+    view       = "white"
+
+    primary   = "black"
+    secondary = "blue"
+    tertiary  = "white"
+
+    title_primary   = "red"
+    title_secondary = "yellow"
+
+    highlight          = "red"
+    highlight_inactive = "blue"
+    highlight_text     = "white"
