@@ -61,7 +61,7 @@ fn render_identity(identity: &Option<mizu_sqlite::identity::Identity>) -> impl V
         .fixed_size((LEFT_WIDTH, IDENTITY_HEIGHT))
 }
 
-fn render_contact(client: &mizu_sqlite::client::ClientInfo) -> impl View {
+fn render_contact(client: &mizu_sqlite::client::ClientInfo) -> (StyledString, i32) {
     // contact_id. **name**       timestamp
     //             tezos_address
     // TODO: show last message like Signal?
@@ -72,24 +72,21 @@ fn render_contact(client: &mizu_sqlite::client::ClientInfo) -> impl View {
         None => styled.append("\n"),
     }
     styled.append(format!("     {}", client.address));
-    TextView::new(styled).fixed_height(2)
+    (styled, client.contact_id)
 }
 
 fn render_contacts(contacts: Vec<mizu_sqlite::client::ClientInfo>) -> impl View {
     // -----Contacts-----
     // | contacts here  |
-    // ||  Add contact ||
-    let contacts = contacts
-        .iter()
-        .map(render_contact)
-        .fold(LinearLayout::vertical(), |view, contact| {
-            view.child(contact)
-        })
-        .child(Panel::new(
-            TextView::new("Add contact").h_align(HAlign::Center),
-        ));
-    Panel::new(contacts)
+    // ------------------
+    // |   Add contact  |
+    let contacts = Panel::new(SelectView::new().with_all(contacts.iter().map(render_contact)))
         .title("Contacts")
+        .min_height(5);
+    let add_contact = Panel::new(Button::new("Add contact", |c| {})).fixed_height(3);
+    LinearLayout::vertical()
+        .child(contacts)
+        .child(add_contact)
         .fixed_width(LEFT_WIDTH)
 }
 
