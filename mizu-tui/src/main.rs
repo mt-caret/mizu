@@ -114,12 +114,12 @@ fn render_contacts(contacts: Vec<mizu_sqlite::client::ClientInfo>) -> impl View 
         let content = LinearLayout::vertical()
             .child(
                 LinearLayout::horizontal()
-                    .child(TextView::new("Name: ").h_align(HAlign::Right))
+                    .child(TextView::new("   Name: "))
                     .child(EditView::new().with_name(CONTACT_NAME_EDIT).min_width(30)),
             )
             .child(
                 LinearLayout::horizontal()
-                    .child(TextView::new("Address: ").h_align(HAlign::Right))
+                    .child(TextView::new("Address: "))
                     .child(
                         EditView::new()
                             .with_name(CONTACT_ADDRESS_EDIT)
