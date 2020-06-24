@@ -1,4 +1,4 @@
-use cursive::align::HAlign;
+use cursive::align::{Align, HAlign};
 use cursive::event::Key;
 use cursive::menu::MenuTree;
 use cursive::theme::Effect;
@@ -6,6 +6,8 @@ use cursive::traits::*;
 use cursive::utils::markup::StyledString;
 use cursive::views::*;
 use cursive::View;
+
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 fn render_identity(identity: &mizu_sqlite::identity::Identity) -> impl View {
     // id. **name**
@@ -156,7 +158,16 @@ fn main() {
         .add_subtree(
             "Application",
             MenuTree::new()
-                .leaf("About Mizu", |_c| {})
+                .leaf("About Mizu", |c| {
+                    let mut styled =
+                        StyledString::plain(format!("💧 Mizu Messenger v{}\n", VERSION));
+                    styled.append_styled("https://github.com/mt-caret/mizu", Effect::Underline);
+                    let content = TextView::new(styled).align(Align::center());
+                    let dialog = Dialog::around(content)
+                        .dismiss_button("Ok")
+                        .h_align(HAlign::Center);
+                    c.add_layer(dialog);
+                })
                 .leaf("Exit", |c| c.quit()),
         )
         .add_subtree(
