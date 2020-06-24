@@ -2,7 +2,7 @@
 
 > 上善若水
 
-![Continuous integration](https://github.com/mt-caret/mizu/workflows/Continuous%20integration/badge.svg)
+![CI](https://github.com/mt-caret/mizu/workflows/CI/badge.svg)
 
 Mizu is an experiment to explore what secure, private, and asynchronous
 messaging backed by a decentralized store.
