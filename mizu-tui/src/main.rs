@@ -1,4 +1,3 @@
-use chrono::naive::NaiveDate;
 use cursive::align::{Align, HAlign};
 use cursive::event::Key;
 use cursive::menu::MenuTree;
@@ -30,32 +29,68 @@ type TezosFactory = Rc<dyn Fn(&str, &str) -> BoxedTezos<'static>>;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const IDENTITY_MENU_INDEX: usize = 1;
+const LEFT_WIDTH: usize = 45;
+const IDENTITY_HEIGHT: usize = 4;
 
-fn render_identity(identity: &mizu_sqlite::identity::Identity) -> impl View {
-    // id. **name**
-    //     tezos_address
-    let mut styled = StyledString::plain(format!("{:>3}. ", identity.id));
-    styled.append_styled(format!("{}\n", identity.name), Effect::Bold);
-    styled.append(format!("     {}", identity.address));
-    Panel::new(TextView::new(styled)).title("Your identity")
+struct CursiveData {
+    current_identity_id: Option<i32>,
+    current_contact_id: Option<i32>,
+    drivers: Drivers,
 }
 
-fn render_contacts<I: Iterator<Item = mizu_sqlite::client::ClientInfo>>(iter: I) -> impl View {
+fn render_identity(identity: &Option<mizu_sqlite::identity::Identity>) -> impl View {
+    // id. **name**
+    //     tezos_address
+    let styled = match identity {
+        Some(identity) => {
+            eprintln!("{} {}", identity.name, identity.address);
+            let mut styled = StyledString::plain(format!("{:>3}. ", identity.id));
+            styled.append_styled(format!("{}\n", identity.name), Effect::Bold);
+            styled.append(format!("     {}", identity.address));
+            styled
+        }
+        None => {
+            let mut styled = StyledString::plain("Click ");
+            styled.append_styled("Identity", Effect::Bold);
+            styled.append(" menu");
+            styled
+        }
+    };
+    Panel::new(TextView::new(styled))
+        .title("Your identity")
+        .fixed_size((LEFT_WIDTH, IDENTITY_HEIGHT))
+}
+
+fn render_contact(client: &mizu_sqlite::client::ClientInfo) -> impl View {
     // contact_id. **name**       timestamp
     //             tezos_address
     // TODO: show last message like Signal?
-    let contacts = iter.fold(LinearLayout::vertical(), |view, client| {
-        let mut styled = StyledString::plain(format!("{:>3}. ", client.contact_id));
-        styled.append_styled(format!("{:<15}", client.name), Effect::Bold);
-        match client.latest_message_timestamp {
-            Some(ts) => styled.append(format!("{}\n", ts)),
-            None => styled.append("\n"),
-        }
-        styled.append(format!("     {}", client.address));
-        view.child(TextView::new(styled))
-    });
+    let mut styled = StyledString::plain(format!("{:>3}. ", client.contact_id));
+    styled.append_styled(format!("{:<15}", client.name), Effect::Bold);
+    match client.latest_message_timestamp {
+        Some(ts) => styled.append(format!("{}\n", ts)),
+        None => styled.append("\n"),
+    }
+    styled.append(format!("     {}", client.address));
+    TextView::new(styled).fixed_height(2)
+}
 
-    Panel::new(contacts).title("Contacts")
+fn render_contacts(contacts: Vec<mizu_sqlite::client::ClientInfo>) -> impl View {
+    // -----Contacts-----
+    // | contacts here  |
+    // ||  Add contact ||
+    let contacts = contacts
+        .iter()
+        .map(render_contact)
+        .fold(LinearLayout::vertical(), |view, contact| {
+            view.child(contact)
+        })
+        .child(Panel::new(
+            TextView::new("Add contact").h_align(HAlign::Center),
+        ));
+    Panel::new(contacts)
+        .title("Contacts")
+        .fixed_width(LEFT_WIDTH)
 }
 
 fn render_messages<I: Iterator<Item = mizu_sqlite::message::Message>>(iter: I) -> impl View {
@@ -134,8 +169,8 @@ fn register_callback(
                             let tezos = factory(&file.pkh, &file.secret_key);
                             let driver = Driver::new(Rc::clone(&user_db), tezos);
                             driver.generate_identity(&mut OsRng, &name)?;
-                            c.with_user_data(|drivers: &mut Drivers| {
-                                drivers.insert(name.clone(), driver)
+                            c.with_user_data(|data: &mut CursiveData| {
+                                data.drivers.insert(name.clone(), driver)
                             })
                             .unwrap();
 
@@ -179,16 +214,66 @@ fn render_identity_menu(
 
     let identities = user_db.list_identities()?;
     tree.clear();
-    tree.add_leaf("register", register_callback(user_db, factory));
+    tree.add_leaf(
+        "register",
+        register_callback(Rc::clone(&user_db), Rc::clone(&factory)),
+    );
 
     if !identities.is_empty() {
         tree.add_delimiter();
     }
     for identity in identities.iter() {
-        tree.add_leaf(&identity.name, |_c| {});
+        let id = identity.id;
+        let user_db = Rc::clone(&user_db);
+        let factory = Rc::clone(&factory);
+        tree.add_leaf(&identity.name, move |c| {
+            c.with_user_data(move |data: &mut CursiveData| {
+                data.current_identity_id = Some(id);
+            });
+            render_world(c, Rc::clone(&user_db), Rc::clone(&factory));
+        });
     }
 
     Ok(())
+}
+
+fn render_world(siv: &mut Cursive, user_db: Rc<MizuConnection>, _factory: TezosFactory) {
+    let world = siv
+        .with_user_data(|data: &mut CursiveData| {
+            let (identity, contacts) =
+                match data.current_identity_id.map(|id| user_db.find_identity(id)) {
+                    Some(Ok(identity)) => match user_db.list_talking_clients(identity.id) {
+                        Ok(contacts) => (Some(identity), contacts),
+                        Err(e) => {
+                            eprintln!(
+                                "error while retrieving contacts for the current identity {}: {:?}",
+                                identity.name, e
+                            );
+                            (Some(identity), vec![])
+                        }
+                    },
+                    Some(Err(e)) => {
+                        eprintln!("current identity not found: {:?}", e);
+                        data.current_identity_id = None;
+                        (None, vec![])
+                    }
+                    None => (None, vec![]),
+                };
+            let identity = render_identity(&identity);
+            let contacts = render_contacts(contacts);
+            LinearLayout::vertical().child(identity).child(contacts)
+        })
+        .unwrap();
+
+    let layers = siv.screen_mut();
+    match layers.len() {
+        0 => layers.add_fullscreen_layer(world),
+        1 => {
+            layers.pop_layer();
+            layers.add_fullscreen_layer(world);
+        }
+        _ => panic!("too many layers"),
+    }
 }
 
 #[derive(StructOpt)]
@@ -253,29 +338,16 @@ fn main() -> Result<(), DynamicError> {
 
     let opt = Opt::from_args();
 
-    let identity = mizu_sqlite::identity::Identity {
+    /*let identity = mizu_sqlite::identity::Identity {
         id: 1,
         name: "Alice".into(),
         address: "tz1alice".into(),
         x3dh_client: vec![],
         created_at: "".into(),
     };
-    let client_info = vec![
-        mizu_sqlite::client::ClientInfo {
-            contact_id: 2,
-            address: "tz1hogehoge".into(),
-            name: "Bob".into(),
-            latest_message_timestamp: Some(NaiveDate::from_ymd(1996, 5, 24).and_hms(1, 23, 0)),
-        },
-        mizu_sqlite::client::ClientInfo {
-            contact_id: 13,
-            address: "tz1fugafuga".into(),
-            name: "Chris".into(),
-            latest_message_timestamp: Some(NaiveDate::from_ymd(2038, 12, 11).and_hms(7, 23, 54)),
-        },
-    ];
+    let client_info = vec![];
     let left_view = LinearLayout::vertical()
-        .child(render_identity(&identity))
+        .child(render_identity(&None))
         .child(render_contacts(client_info.into_iter()));
 
     let messages = vec![
@@ -322,10 +394,14 @@ fn main() -> Result<(), DynamicError> {
     let view = LinearLayout::horizontal()
         .child(left_view)
         .child(DummyView)
-        .child(right_view.full_screen());
+        .child(right_view.full_screen());*/
 
     let mut siv = cursive::default();
-    siv.set_user_data(drivers);
+    siv.set_user_data(CursiveData {
+        current_identity_id: None,
+        current_contact_id: None,
+        drivers,
+    });
 
     let theme = opt
         .theme
@@ -369,7 +445,8 @@ fn main() -> Result<(), DynamicError> {
     )?;
 
     siv.set_autohide_menu(false);
-    siv.add_fullscreen_layer(view);
+    //siv.add_fullscreen_layer(view);
+    render_world(&mut siv, user_db, mock_factory);
     siv.add_global_callback(Key::Esc, |c| c.select_menubar());
     siv.run();
 
