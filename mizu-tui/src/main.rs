@@ -84,6 +84,9 @@ fn aligned_inputs<S: Into<String>>(labels: Vec<S>) -> impl View {
 
 #[derive(StructOpt)]
 struct Opt {
+    #[structopt(long)]
+    /// Path to theme TOML file (see
+    /// https://docs.rs/cursive/0.15.0/cursive/theme/index.html#themes)
     theme: Option<PathBuf>,
 }
 
