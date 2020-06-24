@@ -401,7 +401,7 @@ mod test {
         let alice_address = "alice".to_string();
         let alice_secret_key = "alice".to_string();
         let bob_address = "bob".to_string();
-        let bob_secret_key = "alice".to_string();
+        let bob_secret_key = "bob".to_string();
 
         let mock_conn = Rc::new({
             // Create an in-memory SQLite database
