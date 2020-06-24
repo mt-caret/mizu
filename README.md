@@ -15,9 +15,9 @@ non-cryptographers who have not had substantial experience designing or
 implementing security-critical communication protocols. Please do not use
 this for anything real.
 
-- [threat model](./threat_model.md)
-- [technical details](./technical_details.md)
-- [build instructions](./build_instructions.md)
+- [threat model](./docs/threat_model.md)
+- [technical details](./docs/technical_details.md)
+- [build instructions](./docs/build_instructions.md)
 
 ## why not [Signal](https://signal.org/)?
 
