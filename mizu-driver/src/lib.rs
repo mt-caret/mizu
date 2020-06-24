@@ -404,6 +404,7 @@ mod test {
         let bob_secret_key = "alice".to_string();
 
         let mock_conn = Rc::new(SqliteConnection::establish(":memory:").unwrap());
+        mizu_tezos_mock::run_migrations(&*mock_conn);
 
         let mut rng = OsRng;
 
@@ -414,8 +415,6 @@ mod test {
                 alice_secret_key,
                 Rc::clone(&mock_conn),
             );
-            // This must be run *once and only once* per database, or will fail.
-            tezos_mock.run_migrations();
             Driver::new(user_database, tezos_mock)
         };
         let bob = {

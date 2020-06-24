@@ -35,7 +35,14 @@ pub struct TezosMock {
     conn: Rc<SqliteConnection>,
 }
 
-embed_migrations!("./migrations");
+embed_migrations!();
+
+// TODO: should probably check for errors
+// TODO: embedded_migrations::run_with_output will redirect output instead
+// of throwing it away, should log this.
+pub fn run_migrations(conn: &SqliteConnection) {
+    embedded_migrations::run(conn).expect("migration should never fail");
+}
 
 impl TezosMock {
     pub fn new(address: String, secret_key: String, conn: Rc<SqliteConnection>) -> Self {
@@ -44,13 +51,6 @@ impl TezosMock {
             secret_key: secret_key.into(),
             conn,
         }
-    }
-
-    // TODO: should probably check for errors
-    // TODO: embedded_migrations::run_with_output will redirect output instead
-    // of throwing it away, should log this.
-    pub fn run_migrations(&self) {
-        embedded_migrations::run(&*self.conn).expect("migration should never fail");
     }
 
     /*

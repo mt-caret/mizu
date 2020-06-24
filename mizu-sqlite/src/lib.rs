@@ -25,7 +25,7 @@ pub struct MizuConnection {
     conn: SqliteConnection,
 }
 
-embed_migrations!("./migrations");
+embed_migrations!();
 
 impl MizuConnection {
     pub fn new(conn: SqliteConnection) -> Self {
@@ -33,9 +33,17 @@ impl MizuConnection {
     }
 
     pub fn connect(url: &str) -> std::result::Result<Self, ConnectionError> {
-        Ok(Self {
+        let run_migration = url == ":memory:" || std::fs::metadata(url).is_err();
+
+        let mizu_connection = Self {
             conn: SqliteConnection::establish(url)?,
-        })
+        };
+
+        if run_migration {
+            mizu_connection.run_migrations();
+        }
+
+        Ok(mizu_connection)
     }
 
     // TODO: should probably check for errors
