@@ -47,8 +47,8 @@ pub fn run_migrations(conn: &SqliteConnection) {
 impl TezosMock {
     pub fn new(address: String, secret_key: String, conn: Rc<SqliteConnection>) -> Self {
         TezosMock {
-            address: address,
-            secret_key: secret_key,
+            address,
+            secret_key,
             conn,
         }
     }
