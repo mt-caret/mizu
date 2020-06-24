@@ -65,7 +65,7 @@ pub trait Tezos {
     fn register(&self, identity_key: Option<&[u8]>, prekey: &[u8]) -> Result<(), Self::WriteError>;
 }
 
-impl<'a, T: Tezos> Tezos for &'a T {
+impl<'a, T: Tezos + ?Sized> Tezos for &'a T {
     type ReadError = T::ReadError;
     type WriteError = T::WriteError;
 
@@ -90,7 +90,7 @@ impl<'a, T: Tezos> Tezos for &'a T {
     }
 }
 
-impl<T: Tezos> Tezos for Box<T> {
+impl<T: Tezos + ?Sized> Tezos for Box<T> {
     type ReadError = T::ReadError;
     type WriteError = T::WriteError;
 
@@ -115,7 +115,7 @@ impl<T: Tezos> Tezos for Box<T> {
     }
 }
 
-impl<T: Tezos> Tezos for std::sync::Arc<T> {
+impl<T: Tezos + ?Sized> Tezos for std::sync::Arc<T> {
     type ReadError = T::ReadError;
     type WriteError = T::WriteError;
 

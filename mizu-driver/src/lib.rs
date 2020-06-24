@@ -6,7 +6,7 @@ use mizu_crypto::Client;
 use mizu_sqlite::MizuConnection;
 use mizu_sqlite::{contact::Contact, identity::Identity, message::Message};
 use mizu_tezos::TezosRpc;
-use mizu_tezos_interface::Tezos;
+use mizu_tezos_interface::{BoxedTezos, Tezos};
 use rand::{CryptoRng, RngCore};
 use std::convert::TryInto;
 use std::fmt::{Debug, Display};
@@ -70,6 +70,16 @@ where
 {
     pub fn new(conn: Rc<MizuConnection>, tezos: T) -> Self {
         Self { conn, tezos }
+    }
+
+    pub fn boxed<'a>(self) -> Driver<BoxedTezos<'a>>
+    where
+        T: 'a,
+    {
+        Driver {
+            conn: self.conn,
+            tezos: self.tezos.boxed(),
+        }
     }
 
     pub fn list_identities(&self) -> DriverResult<T, Vec<Identity>> {

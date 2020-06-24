@@ -6,6 +6,11 @@ use cursive::traits::*;
 use cursive::utils::markup::StyledString;
 use cursive::views::*;
 use cursive::View;
+use serde::{Deserialize, Serialize};
+use std::error::Error;
+use std::path::Path;
+use std::rc::Rc;
+use structopt::StructOpt;
 
 fn render_identity(identity: &mizu_sqlite::identity::Identity) -> impl View {
     // id. **name**
@@ -77,8 +82,55 @@ fn aligned_inputs<S: Into<String>>(labels: Vec<S>) -> impl View {
 }
 */
 
-fn main() {
+fn error_dialog<E: std::fmt::Debug>(error: E) -> impl View {
+    Dialog::around(TextView::new(format!("{:?}", error)))
+        .title("Error")
+        .dismiss_button("OK")
+}
+
+#[derive(StructOpt)]
+struct Opt {
+    #[structopt(long)]
+    db: String,
+    #[structopt(long)]
+    tezos_mock: String,
+}
+
+#[derive(Deserialize, Serialize)]
+struct IdentityFile {
+    name: String,
+    pkh: String,
+    secret_key: String,
+}
+
+fn read_identity_file<P: AsRef<Path>>(
+    path: P,
+) -> Result<IdentityFile, Box<dyn Error + Send + Sync + 'static>> {
+    let content = std::fs::read_to_string(path)?;
+    let identity_file = serde_json::from_str(&content)?;
+    Ok(identity_file)
+}
+
+fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     use chrono::naive::NaiveDate;
+    use diesel::prelude::*;
+    use mizu_driver::Driver;
+    use mizu_sqlite::MizuConnection;
+    use mizu_tezos_interface::BoxedTezos;
+    use mizu_tezos_mock::TezosMock;
+    use rand::rngs::OsRng;
+    use std::collections::HashMap;
+
+    type Drivers = HashMap<String, Driver<BoxedTezos<'static>>>;
+
+    let args = Opt::from_args();
+    let user_db = Rc::new(MizuConnection::connect(&args.db)?);
+    let mock_db = Rc::new(SqliteConnection::establish(&args.tezos_mock)?);
+    let mock_factory = {
+        let mock_db = Rc::clone(&mock_db);
+        Rc::new(move |pkh: String, _secret_key: String| TezosMock::new(pkh, Rc::clone(&mock_db)))
+    };
+    let drivers: Drivers = HashMap::new();
 
     let identity = mizu_sqlite::identity::Identity {
         id: 1,
@@ -152,6 +204,7 @@ fn main() {
         .child(right_view.full_screen());
 
     let mut siv = cursive::default();
+    siv.set_user_data(drivers);
     siv.menubar()
         .add_subtree(
             "Application",
@@ -161,22 +214,49 @@ fn main() {
         )
         .add_subtree(
             "Identity",
-            MenuTree::new().leaf("register", |c| {
-                const IDENTITY_FILE_EDIT: &str = "IDENTITY_FILE_EDIT";
+            MenuTree::new().leaf("register", {
+                let user_db = Rc::clone(&user_db);
+                move |c| {
+                    const IDENTITY_FILE_EDIT: &str = "IDENTITY_FILE_EDIT";
 
-                let content = LinearLayout::horizontal()
-                    .child(TextView::new("identity file: "))
-                    .child(EditView::new().with_name(IDENTITY_FILE_EDIT).min_width(15));
+                    let content = LinearLayout::horizontal()
+                        .child(TextView::new("identity file: "))
+                        .child(EditView::new().with_name(IDENTITY_FILE_EDIT).min_width(15));
 
-                c.add_layer(
-                    Dialog::around(content)
-                        .title("Register your identity with Mizu")
-                        .dismiss_button("Cancel")
-                        .button("Ok", |c| {
-                            c.pop_layer();
-                        })
-                        .h_align(HAlign::Center),
-                );
+                    c.add_layer(
+                        Dialog::around(content)
+                            .title("Register your identity with Mizu")
+                            .dismiss_button("Cancel")
+                            .button("OK", {
+                                let user_db = Rc::clone(&user_db);
+                                let mock_factory = Rc::clone(&mock_factory);
+                                move |c| {
+                                    c.pop_layer();
+
+                                    let edit: ViewRef<EditView> =
+                                        c.find_name(IDENTITY_FILE_EDIT).unwrap();
+                                    if let Err(e) = read_identity_file(edit.get_content().as_str())
+                                        .and_then(|file| {
+                                            let name = file.name;
+                                            let mock = mock_factory(file.pkh, file.secret_key);
+                                            let driver =
+                                                Driver::new(Rc::clone(&user_db), mock).boxed();
+                                            driver.generate_identity(&mut OsRng, &name)?;
+                                            c.with_user_data(move |drivers: &mut Drivers| {
+                                                drivers.insert(name, driver)
+                                            })
+                                            .unwrap();
+
+                                            Ok(())
+                                        })
+                                    {
+                                        c.add_layer(error_dialog(e))
+                                    }
+                                }
+                            })
+                            .h_align(HAlign::Center),
+                    );
+                }
             }),
         );
 
@@ -184,4 +264,6 @@ fn main() {
     siv.add_fullscreen_layer(view);
     siv.add_global_callback(Key::Esc, |c| c.select_menubar());
     siv.run();
+
+    Ok(())
 }
