@@ -245,7 +245,15 @@ where
                     .map_err(UserData)?;
 
                 // Encrypt message and increment a ratchet.
-                // TODO: I don't know this unwrap() may panic or not. Any thoughts? > mt_caret
+                // TODO: I don't know this unwrap() may panic or not. Any thoughts? > mtakeda
+                //
+                // mtakeda: AFAIK it should be safe to unwrap here since I
+                // don't think there's a way for create_message to return
+                // None for ordinary arguments (maybe if the keys are very
+                // weird like "" or very odd).
+                // That being said, I noticed errors being converted to opaque
+                // types in mizu-crypto, so fixing that and verifying that this
+                // is actually safe is TODO.
                 let message = client
                     .create_message(rng, &data.identity_key, &data.prekey, message.as_bytes())
                     .unwrap();
