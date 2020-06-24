@@ -103,9 +103,33 @@ fn render_contacts(contacts: Vec<mizu_sqlite::contact::Contact>) -> impl View {
     // | contacts here  |
     // ------------------
     // |   Add contact  |
-    let contacts = Panel::new(SelectView::new().with_all(contacts.iter().map(render_contact)))
-        .title("Contacts")
-        .min_height(5);
+    fn update_messages(c: &mut Cursive, contact_id: i32) {
+        c.with_user_data(|data: &mut CursiveData| {
+            data.current_contact_id = Some(contact_id);
+        })
+        .unwrap();
+        render_world(c);
+    }
+
+    fn on_select(c: &mut Cursive, contact_id: &i32) {
+        eprintln!("selected contact: {}", contact_id);
+        update_messages(c, *contact_id);
+    }
+
+    fn on_submit(c: &mut Cursive, contact_id: &i32) {
+        eprintln!("submitted contact: {}", contact_id);
+        update_messages(c, *contact_id);
+    }
+
+    let contacts = Panel::new(
+        SelectView::new()
+            .with_all(contacts.iter().map(render_contact))
+            .on_select(on_select)
+            .on_submit(on_submit)
+            .with_name("SELECTON"),
+    )
+    .title("Contacts")
+    .min_height(5);
     let add_contact = Panel::new(Button::new("Add contact", |c| {
         if c.with_user_data(|data: &mut CursiveData| data.current_identity_id.is_none())
             .unwrap()
