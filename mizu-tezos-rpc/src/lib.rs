@@ -664,7 +664,6 @@ mod tests {
     fn reads_work() -> Result<()> {
         let rpc = get_tezos_rpc()?;
 
-        println!("{}", serde_json::json!(rpc.get_from_big_map(&rpc.address)?));
         assert!(rpc.get_from_big_map(&rpc.address).is_ok());
 
         Ok(())
