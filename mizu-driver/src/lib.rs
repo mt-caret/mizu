@@ -131,6 +131,15 @@ where
             .map_err(DriverError::UserData)
     }
 
+    pub fn find_contact_by_address(
+        &self,
+        address: &str,
+    ) -> DriverResult<T, mizu_sqlite::contact::Contact> {
+        self.conn
+            .find_contact_by_address(address)
+            .map_err(DriverError::UserData)
+    }
+
     pub fn find_user(
         &self,
         address: &str,

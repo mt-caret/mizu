@@ -169,9 +169,13 @@ fn render_contacts(contacts: Vec<mizu_sqlite::contact::Contact>) -> impl View {
 
                     match c
                         .with_user_data(|data: &mut CursiveData| {
-                            data.current_driver()
-                                .unwrap()
-                                .add_contact(&name.get_content(), &address.get_content())
+                            let driver = data.current_driver().unwrap();
+                            driver.add_contact(&name.get_content(), &address.get_content())?;
+                            driver
+                                .find_contact_by_address(&address.get_content())
+                                .map(|contact| {
+                                    data.current_contact_id = Some(contact.id);
+                                })
                         })
                         .unwrap()
                     {
@@ -305,10 +309,12 @@ fn register_callback(
                             let identity = user_db.find_identity_by_name(&name)?;
                             driver.publish_identity(identity.id)?;
                             c.with_user_data(|data: &mut CursiveData| {
-                                data.drivers.insert(name.clone(), driver)
+                                data.drivers.insert(name.clone(), driver);
+                                data.current_identity_id = Some(identity.id);
                             })
                             .unwrap();
 
+                            render_world(c);
                             // rerender the Identity menu
                             render_identity_menu(
                                 // 1st subtree corresponds to "Identity" menu

@@ -124,12 +124,12 @@ impl MizuConnection {
             .first::<contact::Contact>(&self.conn)
     }
 
-    pub fn find_contacts(&self, needle: &str) -> Result<Vec<contact::Contact>> {
+    pub fn find_contact_by_address(&self, needle: &str) -> Result<contact::Contact> {
         use schema::contacts::dsl::*;
 
         contacts
-            .filter(name.eq(needle))
-            .load::<contact::Contact>(&self.conn)
+            .filter(address.eq(needle))
+            .first::<contact::Contact>(&self.conn)
     }
 
     pub fn create_client(
