@@ -203,13 +203,15 @@ fn render_input_view() -> impl View {
     let textarea = OnEventView::new(TextArea::new().with_name("textarea"))
         .on_pre_event(Event::CtrlChar('s'), send_message);
 
-    LinearLayout::horizontal()
-        .child(ResizedView::new(
-            SizeConstraint::Full,
-            SizeConstraint::AtLeast(3),
-            textarea,
-        ))
-        .child(Button::new("send", send_message))
+    Dialog::around(
+        LinearLayout::horizontal()
+            .child(ResizedView::new(
+                SizeConstraint::Full,
+                SizeConstraint::AtLeast(3),
+                textarea,
+            ))
+            .child(Button::new("send", send_message)),
+    )
 }
 
 /*
