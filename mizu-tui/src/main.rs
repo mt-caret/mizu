@@ -283,10 +283,33 @@ fn render_world(siv: &mut Cursive, user_db: Rc<MizuConnection>, _factory: TezosF
             let left = LinearLayout::vertical().child(identity).child(contacts);
 
             let messages = render_messages(messages.into_iter());
+
+
+            // We would like to use Shift+Enter or Ctrl+Enter like other messengers,
+            // but terminals don't support this:
+            // see https://github.com/gyscos/Cursive/issues/151#issuecomment-366578010.
+            let textarea = OnEventView::new(TextArea::new().with_name("textarea"))
+                .on_pre_event(Event::CtrlChar('s'), send_message);
+
+            fn send_message(s: &mut Cursive) {
+                let content = s
+                    .call_on_name("textarea", |t: &mut TextArea| t.get_content().to_string())
+                    .expect("textarea should always exists");
+                s.add_layer(Dialog::text(format!("Message Sent: {}", content)).dismiss_button("Ok"));
+            }
+
+            let input_view = LinearLayout::horizontal()
+                .child(ResizedView::new(
+                    SizeConstraint::Full,
+                    SizeConstraint::AtLeast(3),
+                    textarea,
+                ))
+                .child(Button::new("send", send_message));
+
             let right = Panel::new(
                 LinearLayout::vertical()
                     .child(messages)
-                    .child(TextArea::new().min_height(3)),
+                    .child(input_view),
             )
             .title("Messages");
 
