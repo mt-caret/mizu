@@ -34,8 +34,8 @@ pub struct TezosMock {
 impl TezosMock {
     pub fn new(address: String, secret_key: String, conn: Rc<SqliteConnection>) -> Self {
         TezosMock {
-            address: address.into(),
-            secret_key: secret_key.into(),
+            address: address,
+            secret_key: secret_key,
             conn,
         }
     }
