@@ -131,7 +131,7 @@ fn render_contacts(contacts: Vec<mizu_sqlite::contact::Contact>) -> impl View {
                     .child(
                         EditView::new()
                             .with_name(CONTACT_ADDRESS_EDIT)
-                            .min_width(30),
+                            .min_width(40),
                     ),
             );
         c.add_layer(
@@ -223,7 +223,7 @@ fn register_callback(
 
         let content = LinearLayout::horizontal()
             .child(TextView::new("identity file: "))
-            .child(EditView::new().with_name(IDENTITY_FILE_EDIT).min_width(30));
+            .child(EditView::new().with_name(IDENTITY_FILE_EDIT).min_width(50));
 
         c.add_layer(
             Dialog::around(content)
