@@ -36,24 +36,23 @@ struct CursiveData {
     current_identity_id: Option<i32>,
     current_contact_id: Option<i32>,
     drivers: Drivers,
+    user_db: Rc<MizuConnection>,
+    factory: TezosFactory,
 }
 
 impl CursiveData {
     /// returns a driver for the current identity
-    fn current_driver(
-        &mut self,
-        user_db: &Rc<MizuConnection>,
-        factory: &TezosFactory,
-    ) -> Option<&DynamicDriver> {
+    fn current_driver(&mut self) -> Option<&DynamicDriver> {
         match self.current_identity_id {
             Some(identity_id) => {
-                let identity = user_db.find_identity(identity_id).ok()?;
+                let identity = self.user_db.find_identity(identity_id).ok()?;
+                let user_db = Rc::clone(&self.user_db);
+                let factory = Rc::clone(&self.factory);
                 Some(
                     self.drivers
                         .entry(identity.name.to_string())
                         .or_insert_with(|| {
-                            let user_db = Rc::clone(&user_db);
-                            let tezos = factory(&identity.address, &identity.secret_key);
+                            let tezos = (factory)(&identity.address, &identity.secret_key);
                             Driver::new(user_db, tezos)
                         }),
                 )
@@ -108,7 +107,49 @@ fn render_contacts(contacts: Vec<mizu_sqlite::client::ClientInfo>) -> impl View 
     let contacts = Panel::new(SelectView::new().with_all(contacts.iter().map(render_contact)))
         .title("Contacts")
         .min_height(5);
-    let add_contact = Panel::new(Button::new("Add contact", |c| {})).fixed_height(3);
+    let add_contact = Panel::new(Button::new("Add contact", |c| {
+        const CONTACT_NAME_EDIT: &str = "CONTACT_NAME_EDIT";
+        const CONTACT_ADDRESS_EDIT: &str = "CONTACT_ADDRESS_EDIT";
+
+        let content = LinearLayout::vertical()
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("Name: ").h_align(HAlign::Right))
+                    .child(EditView::new().with_name(CONTACT_NAME_EDIT).min_width(30)),
+            )
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("Address: ").h_align(HAlign::Right))
+                    .child(
+                        EditView::new()
+                            .with_name(CONTACT_ADDRESS_EDIT)
+                            .min_width(30),
+                    ),
+            );
+        c.add_layer(
+            Dialog::around(content)
+                .title("Enter contact name and address")
+                .dismiss_button("Cancel")
+                .button("Ok", |c| {
+                    let name: ViewRef<EditView> = c.find_name(CONTACT_NAME_EDIT).unwrap();
+                    let address: ViewRef<EditView> = c.find_name(CONTACT_ADDRESS_EDIT).unwrap();
+                    c.pop_layer();
+
+                    c.with_user_data(|data: &mut CursiveData| {
+                        if let Err(e) = data
+                            .current_driver()
+                            .unwrap()
+                            .add_contact(&name.get_content(), &address.get_content())
+                        {
+                            eprintln!("failed to add contact: {:?}", e);
+                        }
+                    })
+                    .unwrap();
+                })
+                .h_align(HAlign::Center),
+        )
+    }))
+    .fixed_height(3);
     LinearLayout::vertical()
         .child(contacts)
         .child(add_contact)
@@ -173,7 +214,7 @@ fn register_callback(
 
         let content = LinearLayout::horizontal()
             .child(TextView::new("identity file: "))
-            .child(EditView::new().with_name(IDENTITY_FILE_EDIT).min_width(15));
+            .child(EditView::new().with_name(IDENTITY_FILE_EDIT).min_width(30));
 
         c.add_layer(
             Dialog::around(content)
@@ -191,6 +232,8 @@ fn register_callback(
                             let tezos = factory(&file.pkh, &file.secret_key);
                             let driver = Driver::new(Rc::clone(&user_db), tezos);
                             driver.generate_identity(&mut OsRng, &name)?;
+                            let identity = user_db.find_identity_by_name(&name)?;
+                            driver.publish_identity(identity.id)?;
                             c.with_user_data(|data: &mut CursiveData| {
                                 data.drivers.insert(name.clone(), driver)
                             })
@@ -383,27 +426,16 @@ fn default_theme() -> theme::Theme {
 }
 
 fn main() -> Result<(), DynamicError> {
-    let args = Opt::from_args();
-    let user_db = Rc::new(MizuConnection::connect(&args.db)?);
+    let opt = Opt::from_args();
+    let user_db = Rc::new(MizuConnection::connect(&opt.db)?);
     let mock_factory: TezosFactory = {
         let mock_db = Rc::new(SqliteConnection::establish(
-            args.tezos_mock.as_deref().unwrap_or(":memory:"),
+            opt.tezos_mock.as_deref().unwrap_or(":memory:"),
         )?);
         Rc::new(move |pkh, secret_key| {
             TezosMock::new(pkh.into(), secret_key.into(), Rc::clone(&mock_db)).boxed()
         })
     };
-    let drivers: Drivers = HashMap::new();
-
-    let opt = Opt::from_args();
-
-    let mut siv = cursive::default();
-    siv.set_user_data(CursiveData {
-        current_identity_id: None,
-        current_contact_id: None,
-        drivers,
-    });
-
     let theme = opt
         .theme
         .and_then(|theme_path| match theme::load_theme_file(theme_path) {
@@ -418,6 +450,15 @@ fn main() -> Result<(), DynamicError> {
             }
         })
         .unwrap_or_else(default_theme);
+
+    let mut siv = cursive::default();
+    siv.set_user_data(CursiveData {
+        current_identity_id: None,
+        current_contact_id: None,
+        drivers: HashMap::new(),
+        user_db: Rc::clone(&user_db),
+        factory: Rc::clone(&mock_factory),
+    });
     siv.set_theme(theme);
 
     siv.menubar()

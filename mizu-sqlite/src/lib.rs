@@ -61,12 +61,12 @@ impl MizuConnection {
         identities.find(id).first::<identity::Identity>(&self.conn)
     }
 
-    pub fn find_identities(&self, needle: &str) -> Result<Vec<identity::Identity>> {
+    pub fn find_identity_by_name(&self, needle: &str) -> Result<identity::Identity> {
         use schema::identities::dsl::*;
 
         identities
             .filter(name.eq(needle))
-            .load::<identity::Identity>(&self.conn)
+            .first::<identity::Identity>(&self.conn)
     }
 
     pub fn update_identity(&self, id: i32, name: &str, x3dh: &X3DHClient) -> Result<()> {
