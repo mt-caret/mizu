@@ -230,8 +230,12 @@ where
         our_identity_id: i32,
         their_contact_id: i32,
         message: &str,
-    ) -> DriverResult<T, ()> {
+    ) -> DriverResult<T, Vec<Vec<u8>>> {
         use DriverError::*;
+
+        // To mitigate inconsistency of message ordering, we checks new mesages before posting
+        // TODO: TOCTOU. New messages can appear after checking but before posting.
+        let messages = self.get_messages(rng, our_identity_id, their_contact_id)?;
 
         let our_identity = self.conn.find_identity(our_identity_id).map_err(UserData)?;
         let their_contact = self.conn.find_contact(their_contact_id).map_err(UserData)?;
@@ -288,7 +292,7 @@ where
                     )
                     .map_err(UserData)?;
 
-                Ok(())
+                Ok(messages)
             }
             None => Err(NotFound),
         }

@@ -170,7 +170,9 @@ fn post_message<T: Tezos>(driver: &Driver<T>) -> Command<T> {
         let (message, _input) = uncons(input).ok_or(NotFound)?;
 
         eprintln!("{}\t{}\t{}", our_identity_id, their_contact_id, message);
-        driver.post_message(&mut rng, our_identity_id, their_contact_id, message)
+        driver.post_message(&mut rng, our_identity_id, their_contact_id, message)?;
+
+        Ok(())
     })
 }
 

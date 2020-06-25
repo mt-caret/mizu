@@ -242,7 +242,7 @@ fn send_message(s: &mut Cursive) {
                     .unwrap()
                     .post_message(&mut OsRng, our_identity_id, their_contact_id, &content)
                 {
-                    Ok(()) => None,
+                    Ok(_) => None,
                     Err(e) => Some(
                         Dialog::info(format!("failed to send message: {:?}", e)).title("Error"),
                     ),
