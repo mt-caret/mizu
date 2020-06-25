@@ -452,14 +452,14 @@ fn render_world(siv: &mut Cursive) {
             };
             let messages = Panel::new(
                 LinearLayout::vertical()
-                    .child(messages)
+                    .child(messages.full_height())
                     .child(input_view),
             )
             .title(messages_title);
 
             let right = LinearLayout::vertical()
                 .child(refresh)
-                .child(messages);
+                .child(messages.full_height());
 
             LinearLayout::horizontal()
                 .child(left)
