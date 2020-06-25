@@ -73,7 +73,7 @@ fn render_identity(identity: &Option<mizu_sqlite::identity::Identity>) -> impl V
             styled.append(format!("     {}", identity.address));
 
             Panel::new(TextView::new(styled))
-                .title("Your identity")
+                .title("Identities")
                 .fixed_size((LEFT_WIDTH, IDENTITY_HEIGHT))
         }
         None => {
@@ -82,7 +82,7 @@ fn render_identity(identity: &Option<mizu_sqlite::identity::Identity>) -> impl V
             styled.append(" menu");
 
             Panel::new(TextView::new(styled).align(Align::center()))
-                .title("Your identity")
+                .title("Identities")
                 .fixed_size((LEFT_WIDTH, IDENTITY_HEIGHT))
         }
     }
