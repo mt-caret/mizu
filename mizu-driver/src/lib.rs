@@ -508,19 +508,23 @@ mod test {
         let (alice, bob) = create_drivers();
 
         alice.post_message(&mut rng, 1, 1, "hello").unwrap();
-        //alice.get_messages(&mut rng, 1, 1).unwrap();
         wait();
+
+        // Receiving X3DH might fix?
+        // bob.get_messages(&mut rng, 1, 1).unwrap();
+
+        // this will post X3DH to alice
         bob.post_message(&mut rng, 1, 1, "こんにちは").unwrap();
-        bob.get_messages(&mut rng, 1, 1).unwrap();
         wait();
         bob.post_message(&mut rng, 1, 1, "上善水如").unwrap();
-        bob.get_messages(&mut rng, 1, 1).unwrap();
         wait();
-        alice.post_message(&mut rng, 1, 1, "hey").unwrap();
+
+        // I guess this `get_messages` receives X3DH from bob and leads to inconsistent client.
         alice.get_messages(&mut rng, 1, 1).unwrap();
+
+        alice.post_message(&mut rng, 1, 1, "hey").unwrap();
         wait();
         alice.post_message(&mut rng, 1, 1, "赤月ゆに").unwrap();
-        alice.get_messages(&mut rng, 1, 1).unwrap();
         wait();
 
         alice.get_messages(&mut rng, 1, 1).unwrap();
@@ -533,19 +537,20 @@ mod test {
             "hey".as_bytes(),
             "赤月ゆに".as_bytes(),
         ];
+
         let alice_messages = alice.list_messages(1, 1).unwrap();
         let bob_messages = bob.list_messages(1, 1).unwrap();
 
         assert_eq!(
             all_messages.len(),
             alice_messages.len(),
-            "{:#?}",
+            "alice saved: {:#?}",
             alice_messages
         );
         assert_eq!(
             all_messages.len(),
             bob_messages.len(),
-            "{:#?}",
+            "bob saved: {:#?}",
             bob_messages
         );
 
