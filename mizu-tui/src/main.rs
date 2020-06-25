@@ -98,7 +98,7 @@ fn render_contact(client: &mizu_sqlite::contact::Contact) -> (StyledString, i32)
         Some(ts) => styled.append(format!("{}\n", ts)),
         None => styled.append("\n"),
     }*/
-    styled.append(format!("{}", client.address));
+    styled.append(&client.address);
     (styled, client.id)
 }
 
