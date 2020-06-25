@@ -464,9 +464,10 @@ impl TezosRpc {
             signature: None,
         };
 
-        let (dummy_signature, _) =
+        let dummy_signature =
             crypto::sign_serialized_operation(&self.serialize_operation(&op)?, &self.secret_key)
-                .map_err(RpcError::Crypto)?;
+                .map_err(RpcError::Crypto)?
+                .0;
 
         op.signature = Some(dummy_signature);
 
