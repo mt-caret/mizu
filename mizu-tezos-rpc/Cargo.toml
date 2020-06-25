@@ -17,6 +17,9 @@ num-bigint = { version = "0.3", features = [ "serde" ] }
 num-traits = "0.2"
 hex = "0.4.2"
 
+tiny-bip39 = "0.7.3"
+failure = "0.1.7"
+
 # TODO: crate with little usage, should check for issues
 base58check = "0.1.0"
 
@@ -29,6 +32,11 @@ digest = "0.9.0"
 # crate does not support signing non-64 byte digests :(
 signatory-ring = "0.20.0"
 signature = "1.1.0"
+
+# TODO: OK, this is pretty stupid that we're adding another crypto library.
+# We should just use this one in the future and remove ring/signature ASAP.
+sodiumoxide = "0.2.5"
+sha2 = "0.9.1"
 
 mizu-tezos-interface = { path = "../mizu-tezos-interface" }
 chrono = "0.4.11"

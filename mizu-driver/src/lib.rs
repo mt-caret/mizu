@@ -6,6 +6,7 @@ use mizu_crypto::Client;
 use mizu_sqlite::MizuConnection;
 use mizu_sqlite::{contact::Contact, identity::Identity, message::Message};
 use mizu_tezos_interface::{BoxedTezos, Tezos};
+use mizu_tezos_rpc::crypto;
 use mizu_tezos_rpc::TezosRpc;
 use rand::{CryptoRng, RngCore};
 use std::convert::TryInto;
@@ -15,7 +16,6 @@ use std::rc::Rc;
 use thiserror::Error;
 
 pub mod contract;
-pub mod faucet;
 
 type DieselError = diesel::result::Error;
 
@@ -374,7 +374,7 @@ where
 }
 
 pub fn create_tezos_rpc(
-    faucet_output: faucet::FaucetOutput,
+    faucet_output: crypto::FaucetOutput,
     contract_config: contract::ContractConfig,
 ) -> Result<TezosRpc, Box<dyn std::error::Error + Send + Sync + 'static>> {
     let host = contract_config.rpc_host.parse()?;
@@ -392,7 +392,7 @@ pub fn create_rpc_driver(
     contract_config: &PathBuf,
     db_path: &str,
 ) -> Result<Driver<TezosRpc>, Box<dyn std::error::Error + Send + Sync + 'static>> {
-    let faucet_output = faucet::FaucetOutput::load_from_file(faucet_output)?;
+    let faucet_output = crypto::FaucetOutput::load_from_file(faucet_output)?;
     let contract_config = contract::ContractConfig::load_from_file(contract_config)?;
     let tezos = create_tezos_rpc(faucet_output, contract_config)?;
 

@@ -315,12 +315,15 @@ fn register_callback(
                         let name_edit: ViewRef<EditView> = c.find_name(NAME_EDIT).unwrap();
                         c.pop_layer();
 
-                        match mizu_driver::faucet::FaucetOutput::load_from_file(
+                        match mizu_tezos_rpc::crypto::FaucetOutput::load_from_file(
                             edit.get_content().to_string(),
                         )
                         .and_then(|file| {
+                            let secret_key =
+                                mizu_tezos_rpc::crypto::FaucetOutput::derive_secret_key(&file)?;
+                            eprintln!("loaded secret: {}", secret_key);
                             let name = name_edit.get_content().to_string();
-                            let tezos = factory(&file.pkh, &file.secret);
+                            let tezos = factory(&file.pkh, &secret_key);
                             let driver = Driver::new(Rc::clone(&user_db), tezos);
                             driver.generate_identity(&mut OsRng, &name)?;
                             let identity = user_db.find_identity_by_name(&name)?;
