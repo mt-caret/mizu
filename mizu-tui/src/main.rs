@@ -495,9 +495,9 @@ enum Command {
         #[structopt(long)]
         debug: bool,
         #[structopt(long)]
-        host: Url,
+        host: Option<Url>,
         #[structopt(long)]
-        contract_address: String,
+        contract_address: Option<String>,
     },
 }
 
@@ -535,16 +535,22 @@ fn main() -> Result<(), DynamicError> {
             debug,
             host,
             contract_address,
-        }) => Rc::new(move |pkh, secret_key| {
-            TezosRpc::new(
-                debug,
-                host.clone(),
-                pkh.into(),
-                secret_key.into(),
-                contract_address.clone(),
-            )
-            .boxed()
-        }),
+        }) => {
+            let host =
+                host.unwrap_or_else(|| Url::parse("https://carthagenet.smartpy.io").unwrap());
+            let contract_address = contract_address
+                .unwrap_or_else(|| "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk".to_string());
+            Rc::new(move |pkh, secret_key| {
+                TezosRpc::new(
+                    debug,
+                    host.clone(),
+                    pkh.into(),
+                    secret_key.into(),
+                    contract_address.clone(),
+                )
+                .boxed()
+            })
+        }
         None => {
             let database_url = opt.tezos_mock.as_deref().unwrap_or(":memory:").to_string();
             let run_migration =
