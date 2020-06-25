@@ -15,8 +15,6 @@ Periodically, Mizu will check the postal boxes of each identity in its
 contact list and attempt to decrypt all new messages found.
 Those it successfully decrypts will have been addressed towards the user.
 
-TODO: define "periodically"
-
 Say Alice wants to communicate with Bob. If Bob is aware of this,
 both Alice and Bob can manually add each other's identities to their contact
 lists. However, if Bob is not aware of Alice, communication can be initiated
@@ -36,6 +34,7 @@ Mizu interfaces with the Tezos blockchain by connecting to a Tezos node over
 the network. This, however, leaks a substantial amount of information about
 the user as the node will be able to correlate the IP address with
 identities as well as find out the identities in the contact list of the user.
+See the [threat model](./threat_model.md) for details
 
 This can probably be significantly alleviated by having a pool of Tezos nodes
 which are randomly selected and contacted over Tor. However, care must be
@@ -52,7 +51,7 @@ it is impossible to "spam" a large number of users via messages. The most
 that a malicious spammer can do is to send a large number of (possibly invalid)
 discovery requests to users. However, since appending data to the storage of
 a smart contract incurrs a per-byte cost with no discernable benefit to the
-spammer, doing this at a large scale is impractical.
+spammer, this sort of attack occurring on a large scale seems implausible.
 
 ### attacks against Tezos
 
