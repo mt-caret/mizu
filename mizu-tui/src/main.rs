@@ -13,12 +13,14 @@ use mizu_driver::Driver;
 use mizu_sqlite::MizuConnection;
 use mizu_tezos_interface::{BoxedTezos, Tezos};
 use mizu_tezos_mock::TezosMock;
+use mizu_tezos_rpc::TezosRpc;
 use rand::rngs::OsRng;
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::PathBuf;
 use std::rc::Rc;
 use structopt::StructOpt;
+use url::Url;
 
 type DynamicDriver = Driver<BoxedTezos<'static>>;
 type DynamicError = Box<dyn Error + Send + Sync + 'static>;
@@ -483,6 +485,20 @@ struct Opt {
     /// Path to theme TOML file (see
     /// https://docs.rs/cursive/0.15.0/cursive/theme/index.html#themes)
     theme: Option<PathBuf>,
+    #[structopt(subcommand)]
+    rpc_opt: Option<Command>,
+}
+
+#[derive(StructOpt)]
+enum Command {
+    Rpc {
+        #[structopt(long)]
+        debug: bool,
+        #[structopt(long)]
+        host: Url,
+        #[structopt(long)]
+        contract_address: String,
+    },
 }
 
 fn default_theme() -> theme::Theme {
@@ -514,20 +530,37 @@ fn default_theme() -> theme::Theme {
 fn main() -> Result<(), DynamicError> {
     let opt = Opt::from_args();
     let user_db = Rc::new(MizuConnection::connect(&opt.db)?);
-    let mock_factory: TezosFactory = {
-        let database_url = opt.tezos_mock.as_deref().unwrap_or(":memory:").to_string();
-        let run_migration = database_url == ":memory:" || std::fs::metadata(&database_url).is_err();
-        let mock_db = Rc::new(SqliteConnection::establish(&database_url)?);
-        // Ideally, we want to perform this check in TezosMock like
-        // MizuConnection::connect does, but since we use the connection
-        // across multiple instances, we need to do this here.
-        if run_migration {
-            mizu_tezos_mock::run_migrations(&mock_db);
-        }
+    let mock_factory: TezosFactory = match opt.rpc_opt {
+        Some(Command::Rpc {
+            debug,
+            host,
+            contract_address,
+        }) => Rc::new(move |pkh, secret_key| {
+            TezosRpc::new(
+                debug,
+                host.clone(),
+                pkh.into(),
+                secret_key.into(),
+                contract_address.clone(),
+            )
+            .boxed()
+        }),
+        None => {
+            let database_url = opt.tezos_mock.as_deref().unwrap_or(":memory:").to_string();
+            let run_migration =
+                database_url == ":memory:" || std::fs::metadata(&database_url).is_err();
+            let mock_db = Rc::new(SqliteConnection::establish(&database_url)?);
+            // Ideally, we want to perform this check in TezosMock like
+            // MizuConnection::connect does, but since we use the connection
+            // across multiple instances, we need to do this here.
+            if run_migration {
+                mizu_tezos_mock::run_migrations(&mock_db);
+            }
 
-        Rc::new(move |pkh, secret_key| {
-            TezosMock::new(pkh.into(), secret_key.into(), Rc::clone(&mock_db)).boxed()
-        })
+            Rc::new(move |pkh, secret_key| {
+                TezosMock::new(pkh.into(), secret_key.into(), Rc::clone(&mock_db)).boxed()
+            })
+        }
     };
     let theme = opt
         .theme

@@ -11,7 +11,7 @@ mizu-crypto = { path = "../mizu-crypto" }
 mizu-sqlite = { path = "../mizu-sqlite" }
 mizu-tezos-mock = { path = "../mizu-tezos-mock" }
 mizu-tezos-interface = { path = "../mizu-tezos-interface" }
-mizu-tezos = { path = "../mizu-tezos-rpc" }
+mizu-tezos-rpc = { path = "../mizu-tezos-rpc" }
 bincode = "1.2.1"
 rustyline = "6.2.0"
 rand = "0.7.3"

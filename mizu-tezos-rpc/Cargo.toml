@@ -1,5 +1,5 @@
 [package]
-name = "mizu-tezos"
+name = "mizu-tezos-rpc"
 version = "0.1.0"
 authors = ["mt-caret <mtakeda.enigsol@gmail.com>"]
 edition = "2018"
