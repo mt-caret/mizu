@@ -13,7 +13,7 @@ tries to reduce information leakage, similar to
 **DISCLAIMER**: The design and implementation of Mizu is done by
 non-cryptographers who have not had substantial experience designing or
 implementing security-critical communication protocols. Please do not use
-this for anything real.
+this for anything real yet.
 
 - [threat model](./docs/threat_model.md)
 - [technical details](./docs/technical_details.md)
