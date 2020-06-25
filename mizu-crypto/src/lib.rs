@@ -384,69 +384,76 @@ mod tests {
         let mut alice = Client::new(&mut csprng, alice_info, bob_info);
         let mut bob = Client::new(&mut csprng, bob_info, alice_info);
 
-        // first, alice initiates conversation (ratchet A)
-        let alice_x3dh = alice
-            .create_message(
-                &mut csprng,
-                &bob.x3dh.identity_key.public_key,
-                &bob.x3dh.prekey.public_key,
-                b"alice X3DH",
-            )
-            .unwrap();
-
-        // and encrypt a message using ratchet A
+        // First, Alice initiates communication (ratchet A)
         let alice_msg1 = alice
             .create_message(
                 &mut csprng,
                 &bob.x3dh.identity_key.public_key,
                 &bob.x3dh.prekey.public_key,
-                b"alice DR1",
+                b"alice msg1",
             )
             .unwrap();
 
-        // although bob is trying to initiate too. This may lead to another ratchet B?
-        let bob_x3dh = bob
-            .create_message(
-                &mut csprng,
-                &alice.x3dh.identity_key.public_key,
-                &alice.x3dh.prekey.public_key,
-                b"bob X3DH",
-            )
-            .unwrap();
-
-        // alice receives X3DH from bob, and switch to ratchet B (supposedly)?
-        let bob_x3dh_received = alice
-            .attempt_message_decryption(&mut csprng, bob_x3dh)
-            .unwrap();
-        assert_eq!(bob_x3dh_received, b"bob X3DH");
-
-        // alice send another message encrypted by ratchet B.
+        // and encrypts a message using ratchet A.
         let alice_msg2 = alice
             .create_message(
                 &mut csprng,
                 &bob.x3dh.identity_key.public_key,
                 &bob.x3dh.prekey.public_key,
-                b"alice DR2",
+                b"alice msg2",
             )
             .unwrap();
 
-        // bob tries to decrypt them.
-        // this message causes bob to throw away ratchet B and to use ratchet A?
-        let alice_x3dh_received = bob
-            .attempt_message_decryption(&mut csprng, alice_x3dh)
+        // Bob initiatiates communication at the same time, before seeing
+        // messages sent by Alice. This results in a new X3DH session.
+        let bob_msg1 = bob
+            .create_message(
+                &mut csprng,
+                &alice.x3dh.identity_key.public_key,
+                &alice.x3dh.prekey.public_key,
+                b"bob msg1",
+            )
             .unwrap();
-        assert_eq!(alice_x3dh_received, b"alice X3DH");
 
-        // msg1 is encrypted by ratchet A, so bob succeeds to decrypt.
-        let alice_msg1_received = bob
-            .attempt_message_decryption(&mut csprng, alice_msg1)
-            .unwrap();
-        assert_eq!(alice_msg1_received, b"alice DR1");
+        // Alice receives X3DH-wrapped message from bob, and initializes new
+        // ratchet B.
+        assert_eq!(
+            alice
+                .attempt_message_decryption(&mut csprng, bob_msg1)
+                .unwrap(),
+            b"bob msg1"
+        );
 
-        // but, msg2 is encrypted by ratchet B, and thus bob failed to decrypt.
-        let ailce_msg2_received = bob
-            .attempt_message_decryption(&mut csprng, alice_msg2)
+        // Alice send another message encrypted with ratchet B.
+        let alice_msg3 = alice
+            .create_message(
+                &mut csprng,
+                &bob.x3dh.identity_key.public_key,
+                &bob.x3dh.prekey.public_key,
+                b"alice msg3",
+            )
             .unwrap();
-        assert_eq!(ailce_msg2_received, b"alice DR2");
+
+        // Bob tries to decrypt Alice's old X3DH-wrapped messages,
+        // causing Bob to throw away ratchet B and use ratchet A.
+        assert_eq!(
+            bob.attempt_message_decryption(&mut csprng, alice_msg1)
+                .unwrap(),
+            b"alice msg1"
+        );
+
+        // msg2 is encrypted with ratchet A, so bob can decrypt this.
+        assert_eq!(
+            bob.attempt_message_decryption(&mut csprng, alice_msg2)
+                .unwrap(),
+            b"alice msg2"
+        );
+
+        // But, msg3 is encrypted by ratchet B so Bob can't read this.
+        assert_eq!(
+            bob.attempt_message_decryption(&mut csprng, alice_msg3)
+                .unwrap(),
+            b"alice DR2"
+        );
     }
 }
