@@ -508,27 +508,30 @@ mod test {
         let (alice, bob) = create_drivers();
 
         alice.post_message(&mut rng, 1, 1, "hello").unwrap();
+        alice.get_messages(&mut rng, 1, 1).unwrap();
         wait();
-        // This `get_mesaages` fixed the issue
-        // bob.get_messages(&mut rng, 1, 1).unwrap();
         bob.post_message(&mut rng, 1, 1, "こんにちは").unwrap();
+        bob.get_messages(&mut rng, 1, 1).unwrap();
         wait();
         bob.post_message(&mut rng, 1, 1, "上善水如").unwrap();
+        bob.get_messages(&mut rng, 1, 1).unwrap();
         wait();
-        //alice.post_message(&mut rng, 1, 1, "hey").unwrap();
-        //alice.get_messages(&mut rng, 1, 1).unwrap();
-        //wait();
-        //alice.post_message(&mut rng, 1, 1, "赤月ゆに").unwrap();
-        //alice.get_messages(&mut rng, 1, 1).unwrap();
-        //wait();
+        alice.post_message(&mut rng, 1, 1, "hey").unwrap();
         alice.get_messages(&mut rng, 1, 1).unwrap();
+        wait();
+        alice.post_message(&mut rng, 1, 1, "赤月ゆに").unwrap();
+        alice.get_messages(&mut rng, 1, 1).unwrap();
+        wait();
+
+        alice.get_messages(&mut rng, 1, 1).unwrap();
+        bob.get_messages(&mut rng, 1, 1).unwrap();
 
         let all_messages = [
             "hello".as_bytes(),
             "こんにちは".as_bytes(),
             "上善水如".as_bytes(),
-            //"hey".as_bytes(),
-            //"赤月ゆに".as_bytes(),
+            "hey".as_bytes(),
+            "赤月ゆに".as_bytes(),
         ];
         let alice_messages = alice.list_messages(1, 1).unwrap();
         let bob_messages = bob.list_messages(1, 1).unwrap();
