@@ -453,14 +453,15 @@ fn render_world(siv: &mut Cursive) {
             };
             let messages = Panel::new(
                 LinearLayout::vertical()
-                    .child(messages)
+                    .child(messages.full_height())
                     .child(input_view),
             )
             .title(messages_title);
 
             let right = LinearLayout::vertical()
                 .child(refresh)
-                .child(messages);
+                .child(messages.full_height())
+                .child(Dialog::around(DebugView::new().min_height(15)));
 
             LinearLayout::horizontal()
                 .child(left)
@@ -531,6 +532,7 @@ fn default_theme() -> theme::Theme {
 
 fn main() -> Result<(), DynamicError> {
     log::set_logger(&cursive::logger::CursiveLogger)?;
+    log::set_max_level(log::LevelFilter::Info);
 
     let opt = Opt::from_args();
     let user_db = Rc::new(MizuConnection::connect(&opt.db)?);

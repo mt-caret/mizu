@@ -8,7 +8,7 @@ extern crate diesel_migrations;
 
 use diesel::prelude::*;
 use diesel_migrations::embed_migrations;
-use log::debug;
+use log::info;
 use mizu_tezos_interface::*;
 use std::rc::Rc;
 
@@ -19,7 +19,7 @@ mod user;
 
 macro_rules! dbg_query {
     ($query:expr) => {{
-        debug!(
+        info!(
             "{}",
             diesel::debug_query::<diesel::sqlite::Sqlite, _>(&$query)
         );
