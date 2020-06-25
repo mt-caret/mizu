@@ -375,6 +375,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_async_x3dh_inconsistency() {
         let mut csprng = OsRng;
         let alice_info = b"alice";
