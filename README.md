@@ -15,6 +15,9 @@ non-cryptographers who have not had substantial experience designing or
 implementing security-critical communication protocols. Please do not use
 this for anything real yet.
 
+Watch a brief video of what Mizu currently looks like:
+[Mizu Demonstration](https://www.youtube.com/watch?v=EBYimzbdQq4)
+
 - [threat model](./docs/threat_model.md)
 - [technical details](./docs/technical_details.md)
 - [build instructions](./docs/build_instructions.md)
