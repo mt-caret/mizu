@@ -2,6 +2,7 @@ use base58check::{FromBase58Check, ToBase58Check};
 use blake2::VarBlake2b;
 use digest::{Update, VariableOutput};
 use serde::{Deserialize, Serialize};
+use signatory::public_key::PublicKeyed;
 use signatory_ring::ed25519;
 use signature::Signer;
 use std::fs::read_to_string;
@@ -111,7 +112,6 @@ impl FaucetOutput {
 
     pub fn derive_secret_key(&self) -> Result<String, Error> {
         use bip39::{Language, Mnemonic, Seed};
-        use sodiumoxide::crypto::sign::ed25519;
 
         let mnemonic = Mnemonic::from_phrase(&self.mnemonic.join(" "), Language::English)
             .map_err(Error::ExtractSecretKey)?;
@@ -120,9 +120,10 @@ impl FaucetOutput {
             &[self.email.clone(), self.password.clone()].concat(),
         );
         let seed_bytes = &seed.as_bytes()[0..32];
-        let seed = ed25519::Seed::from_slice(seed_bytes)
+        let seed = ed25519::Seed::from_bytes(seed_bytes)
             .ok_or_else(|| Error::SeedLength(seed_bytes.len()))?;
-        let (public_key, _) = ed25519::keypair_from_seed(&seed);
+        let signer = ed25519::Signer::from(&seed);
+        let public_key = signer.public_key().map_err(|_| Error::Signature)?;
 
         let edpk_prefix: &[u8] = &[0x0d, 0x0f, 0x25, 0xd9];
         let encoded_public_key = base58check_encode(&[edpk_prefix, public_key.as_ref()].concat());
