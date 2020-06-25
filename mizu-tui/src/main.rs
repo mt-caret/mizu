@@ -481,7 +481,7 @@ fn render_world(siv: &mut Cursive) {
 
 #[derive(StructOpt)]
 struct Opt {
-    db: String,
+    db: Option<String>,
     #[structopt(long)]
     tezos_mock: Option<String>,
     #[structopt(long)]
@@ -532,7 +532,9 @@ fn default_theme() -> theme::Theme {
 
 fn main() -> Result<(), DynamicError> {
     let opt = Opt::from_args();
-    let user_db = Rc::new(MizuConnection::connect(&opt.db)?);
+    let user_db = Rc::new(MizuConnection::connect(
+        &opt.db.unwrap_or_else(|| ":memory:".to_string()),
+    )?);
     let mock_factory: TezosFactory = match opt.rpc_opt {
         Some(Command::Rpc {
             debug,
