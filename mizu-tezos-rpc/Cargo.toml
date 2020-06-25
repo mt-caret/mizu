@@ -31,11 +31,8 @@ digest = "0.9.0"
 # Ideally, we would use ed25519-dalek here given how large ring is, but the
 # crate does not support signing non-64 byte digests :(
 signatory-ring = "0.20.0"
+signatory = "0.20.0"
 signature = "1.1.0"
-
-# TODO: OK, this is pretty stupid that we're adding another crypto library.
-# We should just use this one in the future and remove ring/signature ASAP.
-sodiumoxide = "0.2.5"
 
 mizu-tezos-interface = { path = "../mizu-tezos-interface" }
 chrono = "0.4.11"
