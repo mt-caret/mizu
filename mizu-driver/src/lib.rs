@@ -427,8 +427,7 @@ mod test {
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
 
-    #[test]
-    fn test_smoke_1() {
+    fn create_drivers() -> (Driver<TezosMock>, Driver<TezosMock>) {
         // use Tezos address
         let alice_address = "alice".to_string();
         let alice_secret_key = "alice".to_string();
@@ -468,6 +467,14 @@ mod test {
         alice.add_contact("bob's address", &bob_address).unwrap();
         bob.add_contact("alice's address", &alice_address).unwrap();
 
+        (alice, bob)
+    }
+
+    #[test]
+    fn test_smoke_1() {
+        let mut rng = OsRng;
+        let (alice, bob) = create_drivers();
+
         // alice sends some messages to bob.
         alice
             .post_message(&mut rng, 1, 1, "Hello from alice!")
@@ -493,5 +500,57 @@ mod test {
         // alice receives the reply
         let messages = alice.get_messages(&mut rng, 1, 1).unwrap();
         assert_eq!(messages, ["こんにちは".as_bytes(),]);
+    }
+
+    #[test]
+    fn test_async_conversation() {
+        let mut rng = OsRng;
+        let (alice, bob) = create_drivers();
+
+        alice.post_message(&mut rng, 1, 1, "hello").unwrap();
+        wait();
+        bob.post_message(&mut rng, 1, 1, "こんにちは").unwrap();
+        wait();
+        bob.post_message(&mut rng, 1, 1, "上善水如").unwrap();
+        wait();
+        alice.post_message(&mut rng, 1, 1, "hey").unwrap();
+        wait();
+        alice.post_message(&mut rng, 1, 1, "赤月ゆに").unwrap();
+        wait();
+
+        assert_eq!(
+            alice.get_messages(&mut rng, 1, 1).unwrap(),
+            ["こんにちは".as_bytes(), "上善水如".as_bytes(),]
+        );
+        assert_eq!(
+            bob.get_messages(&mut rng, 1, 1).unwrap(),
+            ["hello".as_bytes(), "hey".as_bytes(), "赤月ゆに".as_bytes(),]
+        );
+
+        let all_messages = [
+            "hello".as_bytes(),
+            "こんにちは".as_bytes(),
+            "上善水如".as_bytes(),
+            "hey".as_bytes(),
+            "赤月ゆに".as_bytes(),
+        ];
+        let alice_messages = alice.list_messages(1, 1).unwrap();
+        let bob_messages = bob.list_messages(1, 1).unwrap();
+
+        assert_eq!(all_messages.len(), alice_messages.len());
+        assert_eq!(all_messages.len(), bob_messages.len());
+
+        for (m1, m2) in all_messages
+            .iter()
+            .zip(alice_messages.iter().map(|m| &m.content))
+        {
+            assert_eq!(m2, m1);
+        }
+        for (m1, m2) in all_messages
+            .iter()
+            .zip(bob_messages.iter().map(|m| &m.content))
+        {
+            assert_eq!(m2, m1);
+        }
     }
 }
