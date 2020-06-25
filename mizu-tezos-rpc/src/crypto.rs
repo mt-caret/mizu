@@ -111,7 +111,6 @@ impl FaucetOutput {
 
     pub fn derive_secret_key(&self) -> Result<String, Error> {
         use bip39::{Language, Mnemonic, Seed};
-        //use sha2::{Digest, Sha512};
         use sodiumoxide::crypto::sign::ed25519;
 
         let mnemonic = Mnemonic::from_phrase(&self.mnemonic.join(" "), Language::English)
@@ -120,12 +119,10 @@ impl FaucetOutput {
             &mnemonic,
             &[self.email.clone(), self.password.clone()].concat(),
         );
-        let seed = &seed.as_bytes()[0..32];
-        eprintln!("seed: {}", hex::encode(&seed));
-        let seed = ed25519::Seed::from_slice(seed).ok_or_else(|| Error::SeedLength(seed.len()))?;
-        eprintln!("seed: {}", hex::encode(&seed.as_ref()));
-        let (public_key, secret_key) = ed25519::keypair_from_seed(&seed);
-        eprintln!("secret_key: {}", hex::encode(&secret_key.as_ref()));
+        let seed_bytes = &seed.as_bytes()[0..32];
+        let seed = ed25519::Seed::from_slice(seed_bytes)
+            .ok_or_else(|| Error::SeedLength(seed_bytes.len()))?;
+        let (public_key, _) = ed25519::keypair_from_seed(&seed);
 
         let edpk_prefix: &[u8] = &[0x0d, 0x0f, 0x25, 0xd9];
         let encoded_public_key = base58check_encode(&[edpk_prefix, public_key.as_ref()].concat());
@@ -134,21 +131,8 @@ impl FaucetOutput {
             return Err(Error::AddressMismatch(address, self.pkh.clone()));
         }
 
-        //let mut hasher = Sha512::new();
-        //Digest::update(&mut hasher, seed);
-        //let hash = &hasher.finalize();
-        //let mut lefthalf = hash[32..].to_vec();
-        //lefthalf[0] &= 248;
-        //lefthalf[31] &= 127;
-        //lefthalf[31] |= 64;
-
-        //let edsk_prefix = vec![0x2b, 0xf6, 0x4e, 0x07];
-        //Ok(base58check_encode(&[edsk_prefix, lefthalf].concat()))
-
-        let edsk_prefix = vec![0x2b, 0xf6, 0x4e, 0x07];
-        Ok(base58check_encode(
-            &[&edsk_prefix, &seed.as_ref()[0..32]].concat(),
-        ))
+        let edsk_prefix = vec![0x0d, 0x0f, 0x3a, 0x07];
+        Ok(base58check_encode(&[&edsk_prefix, seed_bytes].concat()))
     }
 }
 
