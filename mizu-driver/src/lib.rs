@@ -508,24 +508,20 @@ mod test {
         let (alice, bob) = create_drivers();
 
         alice.post_message(&mut rng, 1, 1, "hello").unwrap();
+        alice.get_messages(&mut rng, 1, 1).unwrap();
         wait();
         bob.post_message(&mut rng, 1, 1, "こんにちは").unwrap();
+        bob.get_messages(&mut rng, 1, 1).unwrap();
         wait();
         bob.post_message(&mut rng, 1, 1, "上善水如").unwrap();
+        bob.get_messages(&mut rng, 1, 1).unwrap();
         wait();
         alice.post_message(&mut rng, 1, 1, "hey").unwrap();
+        alice.get_messages(&mut rng, 1, 1).unwrap();
         wait();
         alice.post_message(&mut rng, 1, 1, "赤月ゆに").unwrap();
+        alice.get_messages(&mut rng, 1, 1).unwrap();
         wait();
-
-        assert_eq!(
-            alice.get_messages(&mut rng, 1, 1).unwrap(),
-            ["こんにちは".as_bytes(), "上善水如".as_bytes(),]
-        );
-        assert_eq!(
-            bob.get_messages(&mut rng, 1, 1).unwrap(),
-            ["hello".as_bytes(), "hey".as_bytes(), "赤月ゆに".as_bytes(),]
-        );
 
         let all_messages = [
             "hello".as_bytes(),
