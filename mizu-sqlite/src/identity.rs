@@ -1,6 +1,6 @@
 use crate::schema::*;
 
-#[derive(Queryable)]
+#[derive(Debug, Queryable)]
 pub struct Identity {
     pub id: i32,
     pub name: String,

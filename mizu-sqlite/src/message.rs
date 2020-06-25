@@ -1,7 +1,7 @@
 use crate::schema::*;
 use chrono::naive::NaiveDateTime;
 
-#[derive(Queryable)]
+#[derive(Debug, Queryable)]
 pub struct Message {
     pub id: i32,
     pub identity_id: i32,
