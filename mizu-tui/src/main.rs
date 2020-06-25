@@ -14,10 +14,9 @@ use mizu_sqlite::MizuConnection;
 use mizu_tezos_interface::{BoxedTezos, Tezos};
 use mizu_tezos_mock::TezosMock;
 use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 use structopt::StructOpt;
 
@@ -65,23 +64,26 @@ impl CursiveData {
 fn render_identity(identity: &Option<mizu_sqlite::identity::Identity>) -> impl View {
     // id. **name**
     //     tezos_address
-    let styled = match identity {
+    match identity {
         Some(identity) => {
             let mut styled = StyledString::plain(format!("{:>3}. ", identity.id));
             styled.append_styled(format!("{}\n", identity.name), Effect::Bold);
             styled.append(format!("     {}", identity.address));
-            styled
+
+            Panel::new(TextView::new(styled))
+                .title("Your identity")
+                .fixed_size((LEFT_WIDTH, IDENTITY_HEIGHT))
         }
         None => {
             let mut styled = StyledString::plain("Click ");
             styled.append_styled("Identity", Effect::Bold);
             styled.append(" menu");
-            styled
+
+            Panel::new(TextView::new(styled).align(Align::center()))
+                .title("Your identity")
+                .fixed_size((LEFT_WIDTH, IDENTITY_HEIGHT))
         }
-    };
-    Panel::new(TextView::new(styled))
-        .title("Your identity")
-        .fixed_size((LEFT_WIDTH, IDENTITY_HEIGHT))
+    }
 }
 
 fn render_contact(client: &mizu_sqlite::contact::Contact) -> (StyledString, i32) {
@@ -284,11 +286,20 @@ fn register_callback(
     factory: TezosFactory,
 ) -> impl Fn(&mut Cursive) + 'static {
     move |c| {
-        const IDENTITY_FILE_EDIT: &str = "IDENTITY_FILE_EDIT";
+        const FAUCET_FILE_EDIT: &str = "FAUCET_FILE_EDIT";
+        const NAME_EDIT: &str = "NAME_EDIT";
 
-        let content = LinearLayout::horizontal()
-            .child(TextView::new("identity file: "))
-            .child(EditView::new().with_name(IDENTITY_FILE_EDIT).min_width(50));
+        let content = LinearLayout::vertical()
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("       Name: "))
+                    .child(EditView::new().with_name(NAME_EDIT).min_width(50)),
+            )
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("Faucet file: "))
+                    .child(EditView::new().with_name(FAUCET_FILE_EDIT).min_width(50)),
+            );
 
         c.add_layer(
             Dialog::around(content)
@@ -298,12 +309,16 @@ fn register_callback(
                     let user_db = Rc::clone(&user_db);
                     let factory = Rc::clone(&factory);
                     move |c| {
-                        let edit: ViewRef<EditView> = c.find_name(IDENTITY_FILE_EDIT).unwrap();
+                        let edit: ViewRef<EditView> = c.find_name(FAUCET_FILE_EDIT).unwrap();
+                        let name_edit: ViewRef<EditView> = c.find_name(NAME_EDIT).unwrap();
                         c.pop_layer();
 
-                        match read_identity_file(edit.get_content().as_str()).and_then(|file| {
-                            let name = file.name;
-                            let tezos = factory(&file.pkh, &file.secret_key);
+                        match mizu_driver::faucet::FaucetOutput::load_from_file(
+                            edit.get_content().to_string(),
+                        )
+                        .and_then(|file| {
+                            let name = name_edit.get_content().to_string();
+                            let tezos = factory(&file.pkh, &file.secret);
                             let driver = Driver::new(Rc::clone(&user_db), tezos);
                             driver.generate_identity(&mut OsRng, &name)?;
                             let identity = user_db.find_identity_by_name(&name)?;
@@ -468,21 +483,6 @@ struct Opt {
     /// Path to theme TOML file (see
     /// https://docs.rs/cursive/0.15.0/cursive/theme/index.html#themes)
     theme: Option<PathBuf>,
-}
-
-#[derive(Deserialize, Serialize)]
-struct IdentityFile {
-    name: String,
-    pkh: String,
-    secret_key: String,
-}
-
-fn read_identity_file<P: AsRef<Path>>(
-    path: P,
-) -> Result<IdentityFile, Box<dyn Error + Send + Sync + 'static>> {
-    let content = std::fs::read_to_string(path)?;
-    let identity_file = serde_json::from_str(&content)?;
-    Ok(identity_file)
 }
 
 fn default_theme() -> theme::Theme {

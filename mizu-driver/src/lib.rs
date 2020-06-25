@@ -373,27 +373,29 @@ where
     }
 }
 
-pub fn create_rpc_driver(
-    faucet_output: &PathBuf,
-    contract_config: &PathBuf,
-    db_path: &str,
-) -> Result<Driver<TezosRpc>, Box<dyn std::error::Error + Send + Sync + 'static>> {
-    use std::fs::read_to_string;
-
-    // Surprisingly, reading the whole file is faster.
-    // https://github.com/serde-rs/json/issues/160#issuecomment-253446892
-    let faucet_output: faucet::FaucetOutput =
-        serde_json::from_str(&read_to_string(faucet_output)?)?;
-    let contract_config: contract::ContractConfig =
-        serde_json::from_str(&read_to_string(contract_config)?)?;
+pub fn create_tezos_rpc(
+    faucet_output: faucet::FaucetOutput,
+    contract_config: contract::ContractConfig,
+) -> Result<TezosRpc, Box<dyn std::error::Error + Send + Sync + 'static>> {
     let host = contract_config.rpc_host.parse()?;
-    let tezos = TezosRpc::new(
+    Ok(TezosRpc::new(
         contract_config.debug,
         host,
         faucet_output.pkh,
         faucet_output.secret,
         contract_config.contract_address,
-    );
+    ))
+}
+
+pub fn create_rpc_driver(
+    faucet_output: &PathBuf,
+    contract_config: &PathBuf,
+    db_path: &str,
+) -> Result<Driver<TezosRpc>, Box<dyn std::error::Error + Send + Sync + 'static>> {
+    let faucet_output = faucet::FaucetOutput::load_from_file(faucet_output)?;
+    let contract_config = contract::ContractConfig::load_from_file(contract_config)?;
+    let tezos = create_tezos_rpc(faucet_output, contract_config)?;
+
     let conn = Rc::new(MizuConnection::connect(db_path)?);
 
     Ok(Driver::new(conn, tezos))
