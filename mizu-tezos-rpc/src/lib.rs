@@ -464,9 +464,10 @@ impl TezosRpc {
             signature: None,
         };
 
-        let (dummy_signature, _) =
+        let dummy_signature =
             crypto::sign_serialized_operation(&self.serialize_operation(&op)?, &self.secret_key)
-                .map_err(RpcError::Crypto)?;
+                .map_err(RpcError::Crypto)?
+                .0;
 
         op.signature = Some(dummy_signature);
 
@@ -582,6 +583,10 @@ impl Tezos for TezosRpc {
         &self.address
     }
 
+    fn secret_key(&self) -> &str {
+        &self.secret_key
+    }
+
     fn retrieve_user_data(
         &self,
         address: &str,
@@ -660,7 +665,6 @@ mod tests {
     fn reads_work() -> Result<()> {
         let rpc = get_tezos_rpc()?;
 
-        println!("{}", serde_json::json!(rpc.get_from_big_map(&rpc.address)?));
         assert!(rpc.get_from_big_map(&rpc.address).is_ok());
 
         Ok(())

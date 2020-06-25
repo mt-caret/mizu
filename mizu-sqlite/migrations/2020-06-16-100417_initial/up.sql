@@ -11,8 +11,11 @@ CREATE TABLE contacts(
 CREATE TABLE identities(
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     name TEXT NOT NULL,
+    address TEXT NOT NULL, -- Tezos address
+    secret_key TEXT NOT NULL, -- corresponding secret key
     x3dh_client BLOB NOT NULL, -- mizu_crypto::x3dh::X3DHClient in bincode
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(address)
 );
 
 -- Mizu keeps a mizu_crypto::Client for each (account, contact) pair.
@@ -33,7 +36,7 @@ CREATE TABLE messages(
     contact_id INTEGER NOT NULL,
     content BLOB NOT NULL,
     my_message BOOLEAN NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL,
     FOREIGN KEY(identity_id) REFERENCES identities(id),
     FOREIGN KEY(contact_id) REFERENCES contacts(id)
 );

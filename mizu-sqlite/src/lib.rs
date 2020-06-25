@@ -3,8 +3,12 @@
 #[macro_use]
 extern crate diesel;
 
+#[macro_use]
+extern crate diesel_migrations;
+
 use chrono::naive::NaiveDateTime;
 use diesel::prelude::*;
+use diesel_migrations::embed_migrations;
 use mizu_crypto::x3dh::X3DHClient;
 use mizu_crypto::Client;
 
@@ -21,21 +25,46 @@ pub struct MizuConnection {
     conn: SqliteConnection,
 }
 
+embed_migrations!();
+
 impl MizuConnection {
     pub fn new(conn: SqliteConnection) -> Self {
         MizuConnection { conn }
     }
 
     pub fn connect(url: &str) -> std::result::Result<Self, ConnectionError> {
-        Ok(Self {
+        let run_migration = url == ":memory:" || std::fs::metadata(url).is_err();
+
+        let mizu_connection = Self {
             conn: SqliteConnection::establish(url)?,
-        })
+        };
+
+        if run_migration {
+            mizu_connection.run_migrations();
+        }
+
+        Ok(mizu_connection)
     }
 
-    pub fn create_identity(&self, name: &str, x3dh: &X3DHClient) -> Result<()> {
+    // TODO: should probably check for errors
+    // TODO: embedded_migrations::run_with_output will redirect output instead
+    // of throwing it away, should log this.
+    pub fn run_migrations(&self) {
+        embedded_migrations::run(&self.conn).expect("migration should never fail");
+    }
+
+    pub fn create_identity(
+        &self,
+        name: &str,
+        address: &str,
+        secret_key: &str,
+        x3dh: &X3DHClient,
+    ) -> Result<()> {
         diesel::insert_into(schema::identities::table)
             .values(&identity::NewIdentity {
                 name,
+                address,
+                secret_key,
                 x3dh_client: &bincode::serialize(&x3dh).unwrap(),
             })
             .execute(&self.conn)?;
@@ -53,12 +82,12 @@ impl MizuConnection {
         identities.find(id).first::<identity::Identity>(&self.conn)
     }
 
-    pub fn find_identities(&self, needle: &str) -> Result<Vec<identity::Identity>> {
+    pub fn find_identity_by_name(&self, needle: &str) -> Result<identity::Identity> {
         use schema::identities::dsl::*;
 
         identities
             .filter(name.eq(needle))
-            .load::<identity::Identity>(&self.conn)
+            .first::<identity::Identity>(&self.conn)
     }
 
     pub fn update_identity(&self, id: i32, name: &str, x3dh: &X3DHClient) -> Result<()> {
@@ -95,12 +124,12 @@ impl MizuConnection {
             .first::<contact::Contact>(&self.conn)
     }
 
-    pub fn find_contacts(&self, needle: &str) -> Result<Vec<contact::Contact>> {
+    pub fn find_contact_by_address(&self, needle: &str) -> Result<contact::Contact> {
         use schema::contacts::dsl::*;
 
         contacts
-            .filter(name.eq(needle))
-            .load::<contact::Contact>(&self.conn)
+            .filter(address.eq(needle))
+            .first::<contact::Contact>(&self.conn)
     }
 
     pub fn create_client(
@@ -124,6 +153,22 @@ impl MizuConnection {
 
     pub fn list_clients(&self) -> Result<Vec<client::Client>> {
         schema::clients::dsl::clients.load::<client::Client>(&self.conn)
+    }
+
+    pub fn list_talking_clients(&self, identity_id: i32) -> Result<Vec<client::ClientInfo>> {
+        use schema::clients::dsl as clients_dsl;
+        use schema::contacts::dsl as contacts_dsl;
+
+        schema::clients::table
+            .inner_join(schema::contacts::table)
+            .filter(clients_dsl::identity_id.eq(identity_id))
+            .select((
+                contacts_dsl::id,
+                contacts_dsl::address,
+                contacts_dsl::name,
+                clients_dsl::latest_message_timestamp,
+            ))
+            .load::<client::ClientInfo>(&self.conn)
     }
 
     pub fn find_client(&self, identity_id: i32, contact_id: i32) -> Result<Option<client::Client>> {
@@ -180,6 +225,7 @@ impl MizuConnection {
         contact_id: i32,
         content: &[u8],
         my_message: bool,
+        created_at: NaiveDateTime,
     ) -> Result<()> {
         diesel::insert_into(schema::messages::table)
             .values(&message::NewMessage {
@@ -187,6 +233,7 @@ impl MizuConnection {
                 contact_id,
                 content,
                 my_message,
+                created_at,
             })
             .execute(&self.conn)?;
 
@@ -207,7 +254,7 @@ impl MizuConnection {
                     .eq(identity_id)
                     .and(dsl::contact_id.eq(contact_id)),
             )
-            .order_by(dsl::id.asc()) // assuming messages in the DB are not shuffled
+            .order_by(dsl::created_at.asc())
             .load::<message::Message>(&self.conn)
     }
 }

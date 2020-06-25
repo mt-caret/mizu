@@ -1,13 +1,14 @@
 use crate::schema::*;
+use chrono::naive::NaiveDateTime;
 
-#[derive(Queryable)]
+#[derive(Debug, Queryable)]
 pub struct Message {
     pub id: i32,
     pub identity_id: i32,
     pub contact_id: i32,
     pub content: Vec<u8>,
     pub my_message: bool,
-    pub created_at: String,
+    pub created_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
@@ -17,4 +18,5 @@ pub struct NewMessage<'a> {
     pub contact_id: i32,
     pub content: &'a [u8],
     pub my_message: bool,
+    pub created_at: NaiveDateTime,
 }

@@ -170,7 +170,9 @@ fn post_message<T: Tezos>(driver: &Driver<T>) -> Command<T> {
         let (message, _input) = uncons(input).ok_or(NotFound)?;
 
         eprintln!("{}\t{}\t{}", our_identity_id, their_contact_id, message);
-        driver.post_message(&mut rng, our_identity_id, their_contact_id, message)
+        driver.post_message(&mut rng, our_identity_id, their_contact_id, message)?;
+
+        Ok(())
     })
 }
 
@@ -204,6 +206,7 @@ fn commands<T: Tezos>(driver: &Driver<T>) -> Command<T> {
 #[derive(StructOpt, Debug)]
 struct MockOpt {
     address: Option<String>,
+    secret_key: Option<String>,
     db_path: Option<String>,
     mock_db_path: Option<String>,
 }
@@ -241,6 +244,9 @@ fn main() {
             let address = opt
                 .address
                 .unwrap_or_else(|| std::env::var("TEZOS_ADDRESS").expect("address not given"));
+            let secret_key = opt.secret_key.unwrap_or_else(|| {
+                std::env::var("TEZOS_SECRET_KEY").expect("secret key not given")
+            });
             let db_path = opt
                 .db_path
                 .unwrap_or_else(|| std::env::var("MIZU_DB").expect("db_path not given"));
@@ -256,7 +262,7 @@ fn main() {
                     .expect("SqliteConnection: failed to establish connection"),
             );
 
-            let tezos = TezosMock::new(&address, tezos_db_conn);
+            let tezos = TezosMock::new(address, secret_key, tezos_db_conn);
             let driver = Driver::new(conn, tezos);
 
             run_cli(&driver);

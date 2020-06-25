@@ -1,11 +1,19 @@
 use crate::schema::*;
 use chrono::naive::NaiveDateTime;
 
-#[derive(Queryable)]
+#[derive(Debug, Queryable)]
 pub struct Client {
     pub identity_id: i32,
     pub contact_id: i32,
     pub client_data: Vec<u8>,
+    pub latest_message_timestamp: Option<NaiveDateTime>,
+}
+
+#[derive(Debug, Queryable)]
+pub struct ClientInfo {
+    pub contact_id: i32,
+    pub address: String,
+    pub name: String,
     pub latest_message_timestamp: Option<NaiveDateTime>,
 }
 

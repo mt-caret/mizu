@@ -3,7 +3,11 @@
 #[macro_use]
 extern crate diesel;
 
+#[macro_use]
+extern crate diesel_migrations;
+
 use diesel::prelude::*;
+use diesel_migrations::embed_migrations;
 use mizu_tezos_interface::*;
 use std::rc::Rc;
 
@@ -24,15 +28,29 @@ macro_rules! dbg_query {
 
 type DieselError = diesel::result::Error;
 
-pub struct TezosMock<'a> {
+pub struct TezosMock {
     /// Tezos address
-    address: &'a str,
+    address: String,
+    secret_key: String,
     conn: Rc<SqliteConnection>,
 }
 
-impl<'a> TezosMock<'a> {
-    pub fn new(address: &'a str, conn: Rc<SqliteConnection>) -> Self {
-        TezosMock { address, conn }
+embed_migrations!();
+
+// TODO: should probably check for errors
+// TODO: embedded_migrations::run_with_output will redirect output instead
+// of throwing it away, should log this.
+pub fn run_migrations(conn: &SqliteConnection) {
+    embedded_migrations::run(conn).expect("migration should never fail");
+}
+
+impl TezosMock {
+    pub fn new(address: String, secret_key: String, conn: Rc<SqliteConnection>) -> Self {
+        TezosMock {
+            address,
+            secret_key,
+            conn,
+        }
     }
 
     /*
@@ -45,12 +63,16 @@ impl<'a> TezosMock<'a> {
     */
 }
 
-impl<'a> Tezos for TezosMock<'a> {
+impl Tezos for TezosMock {
     type ReadError = DieselError;
     type WriteError = DieselError;
 
     fn address(&self) -> &str {
-        self.address
+        &self.address
+    }
+
+    fn secret_key(&self) -> &str {
+        &self.secret_key
     }
 
     fn retrieve_user_data(&self, address: &str) -> Result<Option<UserData>, Self::ReadError> {
@@ -97,7 +119,7 @@ impl<'a> Tezos for TezosMock<'a> {
         // TODO: transaction?
         // First, retrieve all our posts to determine ones to be removed.
         let user = users_dsl::users
-            .filter(users_dsl::address.eq(self.address))
+            .filter(users_dsl::address.eq(&self.address))
             .first::<user::User>(&*self.conn)?;
         let messages = message::Message::belonging_to(&user)
             .order(messages_dsl::id.asc())
@@ -153,7 +175,7 @@ impl<'a> Tezos for TezosMock<'a> {
             // CR pandaman: Is it okay to fail silently if no matching row exist?
             // We can check if the number of affected rows equals to zero or one.
             None => dbg_query!(
-                diesel::update(dsl::users.filter(dsl::address.eq(self.address)))
+                diesel::update(dsl::users.filter(dsl::address.eq(&self.address)))
                     .set(dsl::prekey.eq(prekey))
             )
             .execute(&*self.conn)?,
@@ -162,7 +184,7 @@ impl<'a> Tezos for TezosMock<'a> {
                 // - updates identity_key and prekey if the address already exists; or
                 // - inserts a new row with the given keys if the address does not exist.
                 dbg_query!(diesel::replace_into(dsl::users).values(&user::NewUser {
-                    address: self.address,
+                    address: &self.address,
                     identity_key,
                     prekey,
                 }))

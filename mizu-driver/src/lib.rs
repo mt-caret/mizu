@@ -1,12 +1,13 @@
 use bincode::{deserialize, serialize};
-use chrono::naive::NaiveDateTime;
+use chrono::{naive::NaiveDateTime, Utc};
 use mizu_crypto::keys::{IdentityPublicKey, PrekeyPublicKey};
 use mizu_crypto::x3dh::X3DHClient;
 use mizu_crypto::Client;
 use mizu_sqlite::MizuConnection;
 use mizu_sqlite::{contact::Contact, identity::Identity, message::Message};
-use mizu_tezos::TezosRpc;
-use mizu_tezos_interface::Tezos;
+use mizu_tezos_interface::{BoxedTezos, Tezos};
+use mizu_tezos_rpc::crypto;
+use mizu_tezos_rpc::TezosRpc;
 use rand::{CryptoRng, RngCore};
 use std::convert::TryInto;
 use std::fmt::{Debug, Display};
@@ -15,7 +16,6 @@ use std::rc::Rc;
 use thiserror::Error;
 
 pub mod contract;
-pub mod faucet;
 
 type DieselError = diesel::result::Error;
 
@@ -72,6 +72,16 @@ where
         Self { conn, tezos }
     }
 
+    pub fn boxed<'a>(self) -> Driver<BoxedTezos<'a>>
+    where
+        T: 'a,
+    {
+        Driver {
+            conn: self.conn,
+            tezos: self.tezos.boxed(),
+        }
+    }
+
     pub fn list_identities(&self) -> DriverResult<T, Vec<Identity>> {
         self.conn.list_identities().map_err(DriverError::UserData)
     }
@@ -97,7 +107,7 @@ where
     ) -> DriverResult<T, ()> {
         let x3dh = X3DHClient::new(rng);
         self.conn
-            .create_identity(name, &x3dh)
+            .create_identity(name, self.tezos.address(), self.tezos.secret_key(), &x3dh)
             .map_err(DriverError::UserData)
     }
 
@@ -118,6 +128,15 @@ where
     pub fn add_contact(&self, name: &str, address: &str) -> DriverResult<T, ()> {
         self.conn
             .create_contact(name, address)
+            .map_err(DriverError::UserData)
+    }
+
+    pub fn find_contact_by_address(
+        &self,
+        address: &str,
+    ) -> DriverResult<T, mizu_sqlite::contact::Contact> {
+        self.conn
+            .find_contact_by_address(address)
             .map_err(DriverError::UserData)
     }
 
@@ -211,8 +230,12 @@ where
         our_identity_id: i32,
         their_contact_id: i32,
         message: &str,
-    ) -> DriverResult<T, ()> {
+    ) -> DriverResult<T, Vec<Vec<u8>>> {
         use DriverError::*;
+
+        // To mitigate inconsistency of message ordering, we checks new mesages before posting
+        // TODO: TOCTOU. New messages can appear after checking but before posting.
+        let messages = self.get_messages(rng, our_identity_id, their_contact_id)?;
 
         let our_identity = self.conn.find_identity(our_identity_id).map_err(UserData)?;
         let their_contact = self.conn.find_contact(their_contact_id).map_err(UserData)?;
@@ -229,8 +252,27 @@ where
                     &their_contact.address,
                 )?;
 
+                // Save the sending message (in plaintext).
+                self.conn
+                    .create_message(
+                        our_identity_id,
+                        their_contact_id,
+                        message.as_bytes(),
+                        true,
+                        Utc::now().naive_utc(),
+                    )
+                    .map_err(UserData)?;
+
                 // Encrypt message and increment a ratchet.
-                // TODO: I don't know this unwrap() may panic or not. Any thoughts? > mt_caret
+                // TODO: I don't know this unwrap() may panic or not. Any thoughts? > mtakeda
+                //
+                // mtakeda: AFAIK it should be safe to unwrap here since I
+                // don't think there's a way for create_message to return
+                // None for ordinary arguments (maybe if the keys are very
+                // weird like "" or very odd).
+                // That being said, I noticed errors being converted to opaque
+                // types in mizu-crypto, so fixing that and verifying that this
+                // is actually safe is TODO.
                 let message = client
                     .create_message(rng, &data.identity_key, &data.prekey, message.as_bytes())
                     .unwrap();
@@ -239,11 +281,6 @@ where
                 // This should be panic-free
                 let payload = serialize(&message).unwrap();
                 self.tezos.post(&[&payload], &[]).map_err(TezosWrite)?;
-
-                // Save the sent message.
-                self.conn
-                    .create_message(our_identity_id, their_contact_id, &payload, true)
-                    .map_err(UserData)?;
 
                 // Save the incremented Client.
                 self.conn
@@ -255,11 +292,7 @@ where
                     )
                     .map_err(UserData)?;
 
-                // wait a sec so that the next message will have distinct timestamp
-                // TODO: better handling
-                std::thread::sleep(std::time::Duration::from_secs(1));
-
-                Ok(())
+                Ok(messages)
             }
             None => Err(NotFound),
         }
@@ -291,24 +324,29 @@ where
 
                 let mut messages = vec![];
                 for message in data.postal_box.iter() {
+                    let timestamp = message.timestamp;
                     // assuming messages are ordered from older to newer
                     match latest_message_timestamp {
                         // if the recorded timestamp is newer than message's timestamp, skip it.
-                        Some(latest_message_timestamp)
-                            if latest_message_timestamp >= message.timestamp =>
-                        {
+                        Some(latest_message_timestamp) if latest_message_timestamp >= timestamp => {
                             continue;
                         }
                         // otherwise, update the timestamp.
                         _ => {
-                            latest_message_timestamp = Some(message.timestamp);
+                            latest_message_timestamp = Some(timestamp);
                         }
                     }
 
                     let message = deserialize(&message.content).map_err(InvalidMessage)?;
                     if let Ok(message) = client.attempt_message_decryption(rng, message) {
                         self.conn
-                            .create_message(our_identity_id, their_contact_id, &message, false)
+                            .create_message(
+                                our_identity_id,
+                                their_contact_id,
+                                &message,
+                                false,
+                                timestamp,
+                            )
                             .map_err(UserData)?;
                         messages.push(message);
                     }
@@ -339,37 +377,39 @@ where
     }
 }
 
-pub fn create_rpc_driver(
-    faucet_output: &PathBuf,
-    contract_config: &PathBuf,
-    db_path: &str,
-) -> Result<Driver<TezosRpc>, Box<dyn std::error::Error + Send + Sync + 'static>> {
-    use std::fs::read_to_string;
-
-    // Surprisingly, reading the whole file is faster.
-    // https://github.com/serde-rs/json/issues/160#issuecomment-253446892
-    let faucet_output: faucet::FaucetOutput =
-        serde_json::from_str(&read_to_string(faucet_output)?)?;
-    let contract_config: contract::ContractConfig =
-        serde_json::from_str(&read_to_string(contract_config)?)?;
+pub fn create_tezos_rpc(
+    faucet_output: crypto::FaucetOutput,
+    contract_config: contract::ContractConfig,
+) -> Result<TezosRpc, Box<dyn std::error::Error + Send + Sync + 'static>> {
     let host = contract_config.rpc_host.parse()?;
-    let tezos = TezosRpc::new(
+    Ok(TezosRpc::new(
         contract_config.debug,
         host,
         faucet_output.pkh,
         faucet_output.secret,
         contract_config.contract_address,
-    );
+    ))
+}
+
+pub fn create_rpc_driver(
+    faucet_output: &PathBuf,
+    contract_config: &PathBuf,
+    db_path: &str,
+) -> Result<Driver<TezosRpc>, Box<dyn std::error::Error + Send + Sync + 'static>> {
+    let faucet_output = crypto::FaucetOutput::load_from_file(faucet_output)?;
+    let contract_config = contract::ContractConfig::load_from_file(contract_config)?;
+    let tezos = create_tezos_rpc(faucet_output, contract_config)?;
+
     let conn = Rc::new(MizuConnection::connect(db_path)?);
 
     Ok(Driver::new(conn, tezos))
 }
 
-// ensure test related code (especially migration SQL) is not included in the binary
+// ensure test related code is not included in the binary
 #[cfg(test)]
 mod test {
     use super::*;
-    use diesel::{connection::SimpleConnection, prelude::*};
+    use diesel::prelude::*;
     use mizu_sqlite::MizuConnection;
     use mizu_tezos_mock::TezosMock;
     use rand::rngs::OsRng;
@@ -378,39 +418,44 @@ mod test {
     fn prepare_user_database() -> Rc<MizuConnection> {
         // Create an in-memory SQLite database
         let conn = SqliteConnection::establish(":memory:").unwrap();
-        let migration =
-            include_str!("../../mizu-sqlite/migrations/2020-06-16-100417_initial/up.sql");
-        conn.batch_execute(migration).unwrap();
 
-        Rc::new(MizuConnection::new(conn))
+        let mizu_connection = MizuConnection::new(conn);
+        mizu_connection.run_migrations();
+
+        Rc::new(mizu_connection)
     }
 
-    #[test]
-    fn test_smoke_1() {
-        // use Tezos address
-        let alice_address = "alice";
-        let bob_address = "bob";
+    fn wait() {
+        // wait a sec so that the next message will have distinct timestamp
+        // TODO: better handling
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
 
-        let mock_conn = Rc::new({
-            // Create an in-memory SQLite database
-            let conn = SqliteConnection::establish(":memory:").unwrap();
-            let migration =
-                include_str!("../../mizu-tezos-mock/migrations/2020-06-17-013029_initial/up.sql");
-            conn.batch_execute(migration).unwrap();
-            conn
-        });
+    fn create_drivers() -> (Driver<TezosMock>, Driver<TezosMock>) {
+        // use Tezos address
+        let alice_address = "alice".to_string();
+        let alice_secret_key = "alice".to_string();
+        let bob_address = "bob".to_string();
+        let bob_secret_key = "bob".to_string();
+
+        let mock_conn = Rc::new(SqliteConnection::establish(":memory:").unwrap());
+        mizu_tezos_mock::run_migrations(&*mock_conn);
 
         let mut rng = OsRng;
 
         let alice = {
             let user_database = prepare_user_database();
-            let tezos_mock = TezosMock::new(alice_address, Rc::clone(&mock_conn));
+            let tezos_mock = TezosMock::new(
+                alice_address.clone(),
+                alice_secret_key,
+                Rc::clone(&mock_conn),
+            );
             Driver::new(user_database, tezos_mock)
         };
         let bob = {
             let user_database = prepare_user_database();
             // use Tezos address
-            let tezos_mock = TezosMock::new(bob_address, mock_conn);
+            let tezos_mock = TezosMock::new(bob_address.clone(), bob_secret_key, mock_conn);
             Driver::new(user_database, tezos_mock)
         };
 
@@ -423,16 +468,27 @@ mod test {
         bob.publish_identity(1).unwrap();
 
         // next, each user adds each other to the contact list (poke is not implemented yet)
-        alice.add_contact("bob's address", bob_address).unwrap();
-        bob.add_contact("alice's address", alice_address).unwrap();
+        alice.add_contact("bob's address", &bob_address).unwrap();
+        bob.add_contact("alice's address", &alice_address).unwrap();
+
+        (alice, bob)
+    }
+
+    #[test]
+    fn test_smoke_1() {
+        let mut rng = OsRng;
+        let (alice, bob) = create_drivers();
 
         // alice sends some messages to bob.
         alice
             .post_message(&mut rng, 1, 1, "Hello from alice!")
             .unwrap();
+        wait();
+
         alice
             .post_message(&mut rng, 1, 1, "waiting for response...")
             .unwrap();
+        wait();
 
         // bob receives the messages
         let messages = bob.get_messages(&mut rng, 1, 1).unwrap();
@@ -443,9 +499,77 @@ mod test {
 
         // bob replies
         bob.post_message(&mut rng, 1, 1, "こんにちは").unwrap();
+        wait();
 
         // alice receives the reply
         let messages = alice.get_messages(&mut rng, 1, 1).unwrap();
         assert_eq!(messages, ["こんにちは".as_bytes(),]);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_async_conversation() {
+        let mut rng = OsRng;
+        let (alice, bob) = create_drivers();
+
+        alice.post_message(&mut rng, 1, 1, "hello").unwrap();
+        wait();
+
+        // Receiving X3DH might fix?
+        // bob.get_messages(&mut rng, 1, 1).unwrap();
+
+        // this will post X3DH to alice
+        bob.post_message(&mut rng, 1, 1, "こんにちは").unwrap();
+        wait();
+        bob.post_message(&mut rng, 1, 1, "上善水如").unwrap();
+        wait();
+
+        // I guess this `get_messages` receives X3DH from bob and leads to inconsistent client.
+        alice.get_messages(&mut rng, 1, 1).unwrap();
+
+        alice.post_message(&mut rng, 1, 1, "hey").unwrap();
+        wait();
+        alice.post_message(&mut rng, 1, 1, "赤月ゆに").unwrap();
+        wait();
+
+        alice.get_messages(&mut rng, 1, 1).unwrap();
+        bob.get_messages(&mut rng, 1, 1).unwrap();
+
+        let all_messages = [
+            "hello".as_bytes(),
+            "こんにちは".as_bytes(),
+            "上善水如".as_bytes(),
+            "hey".as_bytes(),
+            "赤月ゆに".as_bytes(),
+        ];
+
+        let alice_messages = alice.list_messages(1, 1).unwrap();
+        let bob_messages = bob.list_messages(1, 1).unwrap();
+
+        assert_eq!(
+            all_messages.len(),
+            alice_messages.len(),
+            "alice saved: {:#?}",
+            alice_messages
+        );
+        assert_eq!(
+            all_messages.len(),
+            bob_messages.len(),
+            "bob saved: {:#?}",
+            bob_messages
+        );
+
+        for (m1, m2) in all_messages
+            .iter()
+            .zip(alice_messages.iter().map(|m| &m.content))
+        {
+            assert_eq!(m2, m1);
+        }
+        for (m1, m2) in all_messages
+            .iter()
+            .zip(bob_messages.iter().map(|m| &m.content))
+        {
+            assert_eq!(m2, m1);
+        }
     }
 }

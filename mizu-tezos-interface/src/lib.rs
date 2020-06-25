@@ -53,6 +53,7 @@ pub trait Tezos {
     // Read
     /// Returns Tezos address.
     fn address(&self) -> &str;
+    fn secret_key(&self) -> &str;
     /// Retrieve Mizu user data associated with the specified address in Tezos.
     fn retrieve_user_data(&self, address: &str) -> Result<Option<UserData>, Self::ReadError>;
 
@@ -65,12 +66,16 @@ pub trait Tezos {
     fn register(&self, identity_key: Option<&[u8]>, prekey: &[u8]) -> Result<(), Self::WriteError>;
 }
 
-impl<'a, T: Tezos> Tezos for &'a T {
+impl<'a, T: Tezos + ?Sized> Tezos for &'a T {
     type ReadError = T::ReadError;
     type WriteError = T::WriteError;
 
     fn address(&self) -> &str {
         (**self).address()
+    }
+
+    fn secret_key(&self) -> &str {
+        (**self).secret_key()
     }
 
     fn retrieve_user_data(&self, address: &str) -> Result<Option<UserData>, Self::ReadError> {
@@ -90,12 +95,16 @@ impl<'a, T: Tezos> Tezos for &'a T {
     }
 }
 
-impl<T: Tezos> Tezos for Box<T> {
+impl<T: Tezos + ?Sized> Tezos for Box<T> {
     type ReadError = T::ReadError;
     type WriteError = T::WriteError;
 
     fn address(&self) -> &str {
         (**self).address()
+    }
+
+    fn secret_key(&self) -> &str {
+        (**self).secret_key()
     }
 
     fn retrieve_user_data(&self, address: &str) -> Result<Option<UserData>, Self::ReadError> {
@@ -115,12 +124,16 @@ impl<T: Tezos> Tezos for Box<T> {
     }
 }
 
-impl<T: Tezos> Tezos for std::sync::Arc<T> {
+impl<T: Tezos + ?Sized> Tezos for std::sync::Arc<T> {
     type ReadError = T::ReadError;
     type WriteError = T::WriteError;
 
     fn address(&self) -> &str {
         (**self).address()
+    }
+
+    fn secret_key(&self) -> &str {
+        (**self).secret_key()
     }
 
     fn retrieve_user_data(&self, address: &str) -> Result<Option<UserData>, Self::ReadError> {
@@ -146,6 +159,10 @@ impl<T: Tezos> Tezos for Boxed<T> {
 
     fn address(&self) -> &str {
         self.0.address()
+    }
+
+    fn secret_key(&self) -> &str {
+        self.0.secret_key()
     }
 
     fn retrieve_user_data(&self, address: &str) -> Result<Option<UserData>, Self::ReadError> {
