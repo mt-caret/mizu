@@ -508,7 +508,7 @@ mod test {
         let (alice, bob) = create_drivers();
 
         alice.post_message(&mut rng, 1, 1, "hello").unwrap();
-        alice.get_messages(&mut rng, 1, 1).unwrap();
+        //alice.get_messages(&mut rng, 1, 1).unwrap();
         wait();
         bob.post_message(&mut rng, 1, 1, "こんにちは").unwrap();
         bob.get_messages(&mut rng, 1, 1).unwrap();
