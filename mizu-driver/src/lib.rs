@@ -379,7 +379,6 @@ pub fn create_tezos_rpc(
 ) -> Result<TezosRpc, Box<dyn std::error::Error + Send + Sync + 'static>> {
     let host = contract_config.rpc_host.parse()?;
     Ok(TezosRpc::new(
-        contract_config.debug,
         host,
         faucet_output.pkh,
         faucet_output.secret,

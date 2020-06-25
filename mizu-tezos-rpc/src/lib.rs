@@ -2,6 +2,7 @@ pub mod crypto;
 mod helper;
 pub mod michelson;
 
+use log::{debug, error};
 use michelson::Expr;
 use num_bigint::{BigInt, BigUint};
 use num_traits::Zero;
@@ -195,7 +196,6 @@ impl MizuOp {
 
 #[derive(Debug)]
 pub struct TezosRpc {
-    debug: bool,
     host: Url,
     address: String,
     secret_key: String,
@@ -203,15 +203,8 @@ pub struct TezosRpc {
 }
 
 impl TezosRpc {
-    pub fn new(
-        debug: bool,
-        host: Url,
-        address: String,
-        secret_key: String,
-        contract_address: String,
-    ) -> Self {
+    pub fn new(host: Url, address: String, secret_key: String, contract_address: String) -> Self {
         Self {
-            debug,
             host,
             address,
             secret_key,
@@ -381,9 +374,7 @@ impl TezosRpc {
     fn serialize_and_set_fee(&self, op: &mut Operation) -> Result<String> {
         let sop = self.serialize_operation(&op)?;
 
-        if self.debug {
-            eprintln!("serialized_operation: {}", &sop);
-        }
+        debug!("serialized_operation: {}", &sop);
 
         // sop is hex-encoded so we divide by 2 and add 64 bytes for the appended signature.
         let op_byte_length = sop.len() / 2 + 64;
@@ -401,9 +392,8 @@ impl TezosRpc {
 
         if op.fee <= total_fee {
             op.fee = total_fee + 1;
-            if self.debug {
-                eprintln!("fee set to {}", op.fee);
-            }
+
+            debug!("fee set to {}", op.fee);
             self.serialize_and_set_fee(op)
         } else {
             Ok(sop)
@@ -416,40 +406,29 @@ impl TezosRpc {
     pub fn run_mizu_operation(&self, parameters: &MizuOp) -> Result<String> {
         let parameters = parameters.to_expr();
         let s = serde_json::to_string(&parameters).expect("serde should deserialize any MizuOp");
-        if self.debug {
-            eprintln!("{}", s);
-            eprintln!("{:?}", serde_json::from_str::<michelson::Expr>(&s));
-        }
+
+        debug!("{}", s);
+        debug!("{:?}", serde_json::from_str::<michelson::Expr>(&s));
 
         let counter = self.counter()? + 1;
 
-        if self.debug {
-            eprintln!("counter: {}", counter);
-        }
+        debug!("counter: {}", counter);
 
         let bootstrapped = self.bootstrapped()?;
 
-        if self.debug {
-            eprintln!("bootstrapped: {:?}", bootstrapped);
-        }
+        debug!("bootstrapped: {:?}", bootstrapped);
 
         let constants = self.constants()?;
 
-        if self.debug {
-            eprintln!("constants: {:?}", constants);
-        }
+        debug!("constants: {:?}", constants);
 
         let branch = self.head_hash()?;
 
-        if self.debug {
-            eprintln!("head hash: {}", branch);
-        }
+        debug!("head hash: {}", branch);
 
         let chain_id = self.chain_id()?;
 
-        if self.debug {
-            eprintln!("chain_id: {}", chain_id);
-        }
+        debug!("chain_id: {}", chain_id);
 
         let mut op = Operation {
             branch,
@@ -473,13 +452,11 @@ impl TezosRpc {
 
         let dry_run_result = self.dry_run_contract(&op, &chain_id)?;
 
-        if self.debug {
-            eprintln!("consumed_gas: {}", dry_run_result.consumed_gas);
-            eprintln!(
-                "paid_storage_size_diff: {}",
-                dry_run_result.paid_storage_size_diff
-            );
-        }
+        debug!("consumed_gas: {}", dry_run_result.consumed_gas);
+        debug!(
+            "paid_storage_size_diff: {}",
+            dry_run_result.paid_storage_size_diff
+        );
 
         op.gas_limit = dry_run_result.consumed_gas + 100;
         op.storage_limit = dry_run_result.paid_storage_size_diff + 20;
@@ -490,10 +467,8 @@ impl TezosRpc {
         let (signature, raw_signature) =
             crypto::sign_serialized_operation(&sop, &self.secret_key).map_err(RpcError::Crypto)?;
 
-        if self.debug {
-            eprintln!("signature: {}", signature);
-            eprintln!("raw_signature length: {}", raw_signature.len()); // 64
-        }
+        debug!("signature: {}", signature);
+        debug!("raw_signature length: {}", raw_signature.len()); // 64
 
         op.protocol = Some(PROTOCOL_CARTHAGE.to_string());
         op.signature = Some(signature);
@@ -502,26 +477,20 @@ impl TezosRpc {
 
         if preapply_result[0].get("id").is_some() {
             // some error occurred
-            eprintln!("preapply error: {}", preapply_result);
+            error!("preapply error: {}", preapply_result);
 
             return Err(RpcError::Rpc(preapply_result));
         }
 
-        if self.debug {
-            eprintln!("preapply_result: {}", preapply_result);
-        }
+        debug!("preapply_result: {}", preapply_result);
 
         let signed_sop = [sop, hex::encode(raw_signature)].concat();
 
-        if self.debug {
-            eprintln!("signed_sop: {}", signed_sop);
-        }
+        debug!("signed_sop: {}", signed_sop);
 
         let hash = self.inject_operation(&signed_sop)?;
 
-        if self.debug {
-            eprintln!("operation hash: {}", hash);
-        }
+        debug!("operation hash: {}", hash);
 
         Ok(hash)
     }
@@ -632,7 +601,6 @@ mod tests {
 
     fn get_tezos_rpc() -> Result<TezosRpc> {
         Ok(TezosRpc {
-            debug: false,
             host: Url::parse("https://carthagenet.smartpy.io").map_err(RpcError::UrlParse)?,
             address: "tz1RNhvTfU11uBkJ7ZLxRDn25asLj4tj7JJB".to_string(),
             secret_key: "edsk2yRWMofVt5oqk1BWP4tJGeWZ4ikoZJ4psdMzoBqyqpT9g8tvpk".to_string(),

@@ -9,6 +9,7 @@ use cursive::view::SizeConstraint;
 use cursive::views::*;
 use cursive::Cursive;
 use diesel::prelude::*;
+use log::{error, info};
 use mizu_driver::Driver;
 use mizu_sqlite::MizuConnection;
 use mizu_tezos_interface::{BoxedTezos, Tezos};
@@ -116,12 +117,12 @@ fn render_contacts(contacts: Vec<mizu_sqlite::contact::Contact>) -> impl View {
     }
 
     fn on_select(c: &mut Cursive, contact_id: &i32) {
-        eprintln!("selected contact: {}", contact_id);
+        info!("selected contact: {}", contact_id);
         update_messages(c, *contact_id);
     }
 
     fn on_submit(c: &mut Cursive, contact_id: &i32) {
-        eprintln!("submitted contact: {}", contact_id);
+        info!("submitted contact: {}", contact_id);
         update_messages(c, *contact_id);
     }
 
@@ -184,7 +185,7 @@ fn render_contacts(contacts: Vec<mizu_sqlite::contact::Contact>) -> impl View {
                         .unwrap()
                     {
                         Ok(()) => render_world(c),
-                        Err(e) => eprintln!("failed to add contact: {:?}", e),
+                        Err(e) => error!("failed to add contact: {:?}", e),
                     };
                 })
                 .h_align(HAlign::Center),
@@ -321,7 +322,7 @@ fn register_callback(
                         .and_then(|file| {
                             let secret_key =
                                 mizu_tezos_rpc::crypto::FaucetOutput::derive_secret_key(&file)?;
-                            eprintln!("loaded secret: {}", secret_key);
+                            info!("loaded secret: {}", secret_key);
                             let name = name_edit.get_content().to_string();
                             let tezos = factory(&file.pkh, &secret_key);
                             let driver = Driver::new(Rc::clone(&user_db), tezos);
@@ -403,7 +404,7 @@ fn render_world(siv: &mut Cursive) {
                 match data.current_identity_id.map(|id| data.user_db.find_identity(id)) {
                     Some(Ok(identity)) => Some(identity),
                     Some(Err(e)) => {
-                        eprintln!("current identity not found: {:?}", e);
+                        error!("current identity not found: {:?}", e);
                         data.current_identity_id = None;
                         None
                     }
@@ -412,7 +413,7 @@ fn render_world(siv: &mut Cursive) {
             // TODO: contacts are shared among identities
             // list_talking_clients searches for `Client`s, so contacts are not listed if no conversation happened
             let contacts = data.user_db.list_contacts().unwrap_or_else(|e| {
-                eprintln!("failed to retrieve contacts from local DB: {:?}", e);
+                error!("failed to retrieve contacts from local DB: {:?}", e);
                 vec![]
             });
             let messages = match (data.current_identity_id, data.current_contact_id) {
@@ -420,12 +421,12 @@ fn render_world(siv: &mut Cursive) {
                     // update messages
                     data.current_driver().unwrap().get_messages(&mut OsRng, current_identity_id, current_contact_id)
                         .unwrap_or_else(|e| {
-                            eprintln!("failed to retrieve messages from Tezos: identity = {}, contact = {}, {:?}", current_identity_id, current_contact_id, e);
+                            error!("failed to retrieve messages from Tezos: identity = {}, contact = {}, {:?}", current_identity_id, current_contact_id, e);
                             vec![]
                         });
                     data.user_db.find_messages(current_identity_id, current_contact_id)
                         .unwrap_or_else(|e| {
-                            eprintln!("failed to retrieve messages from local DB: identity = {}, contact = {}, {:?}", current_identity_id, current_contact_id, e);
+                            error!("failed to retrieve messages from local DB: identity = {}, contact = {}, {:?}", current_identity_id, current_contact_id, e);
                             vec![]
                         })
                 }
@@ -444,7 +445,7 @@ fn render_world(siv: &mut Cursive) {
             let messages_title = match data.current_contact_id.map(|id| data.user_db.find_contact(id)) {
                 Some(Ok(contact)) => format!("Conversation with {}", contact.name),
                 Some(Err(e)) => {
-                    eprintln!("current contact not found: {:?}", e);
+                    error!("current contact not found: {:?}", e);
                     data.current_contact_id = None;
                     "Conversation".into()
                 },
@@ -475,7 +476,7 @@ fn render_world(siv: &mut Cursive) {
             layers.pop_layer();
             layers.add_fullscreen_layer(world);
         }
-        _ => eprintln!("too many layers"),
+        _ => error!("too many layers"),
     }
 }
 
@@ -495,8 +496,6 @@ struct Opt {
 #[derive(StructOpt)]
 enum Command {
     Rpc {
-        #[structopt(long)]
-        debug: bool,
         #[structopt(long)]
         host: Option<Url>,
         #[structopt(long)]
@@ -531,11 +530,12 @@ fn default_theme() -> theme::Theme {
 }
 
 fn main() -> Result<(), DynamicError> {
+    log::set_logger(&cursive::logger::CursiveLogger)?;
+
     let opt = Opt::from_args();
     let user_db = Rc::new(MizuConnection::connect(&opt.db)?);
     let mock_factory: TezosFactory = match opt.rpc_opt {
         Some(Command::Rpc {
-            debug,
             host,
             contract_address,
         }) => {
@@ -545,7 +545,6 @@ fn main() -> Result<(), DynamicError> {
                 .unwrap_or_else(|| "KT1UnS3wvwcUnj3dFAikmM773byGjY5Ci2Lk".to_string());
             Rc::new(move |pkh, secret_key| {
                 TezosRpc::new(
-                    debug,
                     host.clone(),
                     pkh.into(),
                     secret_key.into(),
@@ -576,11 +575,11 @@ fn main() -> Result<(), DynamicError> {
         .and_then(|theme_path| match theme::load_theme_file(theme_path) {
             Ok(theme) => Some(theme),
             Err(theme::Error::Io(err)) => {
-                eprintln!("error loading theme: {}", err);
+                error!("error loading theme: {}", err);
                 None
             }
             Err(theme::Error::Parse(err)) => {
-                eprintln!("error parsing theme: {}", err);
+                error!("error parsing theme: {}", err);
                 None
             }
         })

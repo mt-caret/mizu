@@ -16,6 +16,7 @@ serde_with = "1.4.0"
 num-bigint = { version = "0.3", features = [ "serde" ] }
 num-traits = "0.2"
 hex = "0.4.2"
+log = "0.4"
 
 tiny-bip39 = "0.7.3"
 failure = "0.1.7"

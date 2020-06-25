@@ -20,3 +20,4 @@ diesel = { version = "1.4.5", features = ["chrono", "sqlite"] }
 mizu-tezos-interface = { path = "../mizu-tezos-interface" }
 mizu-tezos-rpc = { path = "../mizu-tezos-rpc" }
 url = "2.1.1"
+log = "0.4"
