@@ -4,9 +4,6 @@
 
 ![CI](https://github.com/mt-caret/mizu/workflows/CI/badge.svg)
 
-**If you find this project interesting, please consider voting for it in the
-CoinList Hackathon project page:** [Mizu - CoinList](https://coinlist.co/build/tezos/projects/2bfc55aa-8ce3-4dcb-b3b2-08cc5e526207)
-
 Mizu is an experiment to explore what secure, private, and asynchronous
 messaging might look like when backed by a decentralized store (Tezos).
 Mizu is similar to email combined with PGP, while being forward secret and
